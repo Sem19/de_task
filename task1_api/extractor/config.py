@@ -11,8 +11,10 @@ ACCOUNT_PATH = "/v2/account"
 REPORTS_PATH = "/v2/reports"
 
 DEFAULT_API_BASE = "http://mock-api:8080"
+DEFAULT_PG_DSN = "postgresql://acme:acme@warehouse:5432/acme"
 GRANT_TYPE = "client_credentials"
 REQUEST_TIMEOUT_S = 30.0
+CONNECT_TIMEOUT_S = 5
 TOKEN_REFRESH_MARGIN_S = 30
 
 # Stay under the partner's 60 /v2 requests per minute.
@@ -47,6 +49,11 @@ REPORT_REQUIRED_FIELDS = REPORT_DIMENSIONS + REPORT_METRICS
 POSTGRES_BIGINT_MIN = -9223372036854775808
 POSTGRES_BIGINT_MAX = 9223372036854775807
 
+WAREHOUSE_SCHEMA = "public"
+# Mock account timezone. Used only to backfill legacy rows that predate
+# ``reporting_timezone``. New inserts must supply the account timezone.
+MOCK_ACCOUNT_TIMEZONE = "America/Los_Angeles"
+
 REPORT_STATUS_PENDING = "PENDING"
 REPORT_STATUS_RUNNING = "RUNNING"
 REPORT_STATUS_DONE = "DONE"
@@ -76,6 +83,7 @@ class Settings:
         api_base: Partner API origin, without a trailing slash.
         client_id: OAuth client id.
         client_secret: OAuth client secret.
+        pg_dsn: PostgreSQL connection string (password is never logged).
         request_timeout_s: httpx timeout applied to every request.
         token_refresh_margin_s: Refresh the bearer token this many seconds
             before ``expires_in`` elapses.
@@ -91,6 +99,7 @@ class Settings:
     api_base: str
     client_id: str
     client_secret: str
+    pg_dsn: str = DEFAULT_PG_DSN
     request_timeout_s: float = REQUEST_TIMEOUT_S
     token_refresh_margin_s: int = TOKEN_REFRESH_MARGIN_S
     poll_interval_s: float = REPORT_POLL_INTERVAL_S
@@ -120,6 +129,7 @@ class Settings:
             api_base=api_base,
             client_id=_require(source, "API_CLIENT_ID"),
             client_secret=_require(source, "API_CLIENT_SECRET"),
+            pg_dsn=_optional(source, "PG_DSN", DEFAULT_PG_DSN),
         )
 
 

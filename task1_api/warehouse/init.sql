@@ -1,7 +1,9 @@
--- Landing zone for the partner report. This is the target of task 1.
+-- Authoritative DDL for a fresh warehouse volume.
+-- Postgres runs this once from /docker-entrypoint-initdb.d on first init.
+-- Existing volumes are not recreated; see warehouse/migrations/.
 --
--- The grain and the keys are YOUR decision — this DDL is a starting point, not a
--- specification. If you change it, say why.
+-- reporting_timezone has no column default. New inserts must supply it.
+-- The published partner spec says UTC; the mock account uses America/Los_Angeles.
 
 CREATE TABLE IF NOT EXISTS partner_report (
     report_date     date        NOT NULL,
@@ -16,6 +18,7 @@ CREATE TABLE IF NOT EXISTS partner_report (
     spend_minor     bigint      NOT NULL,
     revenue_minor   bigint      NOT NULL,
     currency        text        NOT NULL,
+    reporting_timezone text     NOT NULL,
 
     -- ingestion metadata
     extracted_at    timestamptz NOT NULL,
