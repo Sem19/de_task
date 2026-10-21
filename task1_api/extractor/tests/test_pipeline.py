@@ -60,6 +60,7 @@ def _state(
     *,
     settled_through: date | None,
     loaded_through: date | None = None,
+    loaded_from: date | None = None,
     last_date_from: date | None = None,
     last_date_to: date | None = None,
 ) -> ExtractState:
@@ -68,6 +69,7 @@ def _state(
     end = last_date_to if last_date_to is not None else loaded
     return ExtractState(
         loaded_through=loaded,
+        loaded_from=loaded_from if loaded_from is not None else start,
         settled_through=settled_through,
         currency="EUR",
         reporting_timezone=MOCK_ACCOUNT_TIMEZONE,

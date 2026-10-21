@@ -1,7 +1,10 @@
 """Plan partner report date windows from checkpoints and EXTRACT_START_DATE.
 
-This module does not read PostgreSQL or call the API. It uses the same coverage
-cursor as ``ExtractState.next_incremental_start`` (``settled_through + 1``).
+This module does not read PostgreSQL or call the API. Incremental coverage
+starts at ``ExtractState.next_incremental_start`` (``settled_through + 1``)
+when anything has settled. If nothing has settled, it starts at
+``loaded_from``, the earliest date of the contiguous loaded prefix, not the
+last snapshot's ``last_date_from``.
 
 ``EXTRACT_START_DATE`` is the configured initial coverage baseline on the first
 run. After a checkpoint exists it is an explicit backfill floor: if it is
@@ -152,7 +155,7 @@ def _incremental_start(
         return today - _LOOKBACK_SPAN
     if state.next_incremental_start is not None:
         return state.next_incremental_start
-    return state.last_date_from
+    return state.loaded_from
 
 
 def _coverage_start(incremental_start: date, extract_start_date: date | None) -> date:

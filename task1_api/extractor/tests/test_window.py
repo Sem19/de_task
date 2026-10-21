@@ -26,6 +26,7 @@ def _state(
     *,
     settled_through: date | None,
     loaded_through: date | None = None,
+    loaded_from: date | None = None,
     last_date_from: date | None = None,
     last_date_to: date | None = None,
 ) -> ExtractState:
@@ -36,6 +37,7 @@ def _state(
     end = last_date_to if last_date_to is not None else loaded
     return ExtractState(
         loaded_through=loaded,
+        loaded_from=loaded_from if loaded_from is not None else start,
         settled_through=settled_through,
         currency="EUR",
         reporting_timezone=MOCK_ACCOUNT_TIMEZONE,
@@ -266,12 +268,13 @@ class PlanExtractWindowsTest(unittest.TestCase):
         days = (date(2026, 3, 15) - date(2026, 1, 1)).days + 1
         self.assertEqual(sum(item.inclusive_days for item in windows), days)
 
-    def test_never_settled_replans_from_last_window_start(self) -> None:
+    def test_never_settled_replans_from_coverage_start(self) -> None:
         windows = plan_extract_windows(
             now_utc=NOW,
             state=_state(
                 settled_through=None,
                 loaded_through=TODAY,
+                loaded_from=date(2026, 10, 19),
                 last_date_from=date(2026, 10, 19),
                 last_date_to=TODAY,
             ),
@@ -279,6 +282,73 @@ class PlanExtractWindowsTest(unittest.TestCase):
         self.assertEqual(windows[0].date_from, date(2026, 10, 19))
         self.assertEqual(windows[-1].date_to, TODAY)
         self.assertEqual(windows[0].kind, WINDOW_INCREMENTAL)
+
+    def test_never_settled_multi_chunk_starts_at_loaded_from(self) -> None:
+        windows = plan_extract_windows(
+            now_utc=NOW,
+            state=_state(
+                settled_through=None,
+                loaded_through=TODAY,
+                loaded_from=date(2026, 10, 8),
+                last_date_from=date(2026, 10, 15),
+                last_date_to=TODAY,
+            ),
+        )
+        self.assertEqual(windows[0].date_from, date(2026, 10, 8))
+        self.assertEqual(windows[-1].date_to, TODAY)
+        _assert_gap_free(self, windows)
+
+    def test_never_settled_partial_run_recovers_remaining_dates(self) -> None:
+        windows = plan_extract_windows(
+            now_utc=NOW,
+            state=_state(
+                settled_through=None,
+                loaded_through=date(2026, 10, 14),
+                loaded_from=date(2026, 10, 8),
+                last_date_from=date(2026, 10, 8),
+                last_date_to=date(2026, 10, 14),
+            ),
+        )
+        self.assertEqual(windows[0].date_from, date(2026, 10, 8))
+        self.assertEqual(windows[-1].date_to, TODAY)
+        _assert_gap_free(self, windows)
+
+    def test_repeated_never_settled_run_has_no_gaps(self) -> None:
+        windows = plan_extract_windows(
+            now_utc=NOW,
+            state=_state(
+                settled_through=None,
+                loaded_through=TODAY,
+                loaded_from=date(2026, 10, 8),
+                last_date_from=date(2026, 10, 15),
+            ),
+        )
+        dates: list[date] = []
+        for window in windows:
+            cursor = window.date_from
+            while cursor <= window.date_to:
+                dates.append(cursor)
+                cursor += timedelta(days=1)
+        self.assertEqual(dates, [
+            date(2026, 10, 8) + timedelta(days=offset)
+            for offset in range((TODAY - date(2026, 10, 8)).days + 1)
+        ])
+
+    def test_never_settled_historical_backfill_is_gap_free(self) -> None:
+        windows = plan_extract_windows(
+            now_utc=NOW,
+            state=_state(
+                settled_through=None,
+                loaded_through=TODAY,
+                loaded_from=date(2026, 10, 8),
+                last_date_from=date(2026, 10, 15),
+            ),
+            extract_start_date=date(2026, 10, 1),
+        )
+        self.assertEqual(windows[0].date_from, date(2026, 10, 1))
+        self.assertEqual(windows[0].kind, WINDOW_BACKFILL)
+        self.assertEqual(windows[-1].date_to, TODAY)
+        _assert_gap_free(self, windows)
 
     def test_first_window_is_baseline_not_full_history(self) -> None:
         windows = plan_extract_windows(

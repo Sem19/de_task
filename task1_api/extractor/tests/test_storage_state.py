@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from psycopg import sql
+from psycopg.types.json import Json
 
 from config import MOCK_ACCOUNT_TIMEZONE
 from storage import (
@@ -25,6 +26,7 @@ from tests.test_storage_connection import (
 )
 from tests.test_storage_loader import EXTRACTED_AT, _row, _snapshot
 from tests.test_storage_schema import _exec_script, _reset_schema, _set_search_path
+from window import plan_extract_windows
 
 WAREHOUSE_DIR = Path(__file__).resolve().parents[2] / "warehouse"
 INIT_SQL_PATH = WAREHOUSE_DIR / "init.sql"
@@ -93,6 +95,7 @@ class ExtractStateTest(unittest.TestCase):
         self.assertEqual(load_result.inserted, 2)
         self.assertIsNotNone(state)
         self.assertEqual(state.loaded_through, date(2026, 10, 21))
+        self.assertEqual(state.loaded_from, date(2026, 10, 15))
         self.assertEqual(state.settled_through, date(2026, 10, 18))
         self.assertEqual(state.next_incremental_start, date(2026, 10, 19))
         self.assertEqual(state.currency, "EUR")
@@ -264,6 +267,95 @@ class ExtractStateTest(unittest.TestCase):
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 14)), 1)
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 7)), 1)
 
+    def test_never_settled_multi_chunk_does_not_skip_earlier_mutable_dates(self) -> None:
+        """A 14-day mutable window spans two 7-day reports; none settle.
+
+        After the second chunk commits, the next plan must still start at
+        the first chunk's date_from, not the last snapshot's date_from.
+        """
+        restated = date(2026, 10, 8)
+        first = _snapshot(
+            (_row(report_date=date(2026, 10, 8)),),
+            date_from=date(2026, 10, 8),
+            date_to=date(2026, 10, 14),
+            restated_through=restated,
+        )
+        _, state = self._commit(first)
+        self.assertIsNone(state.settled_through)
+        second = _snapshot(
+            (_row(report_date=date(2026, 10, 21), country="DE"),),
+            date_from=date(2026, 10, 15),
+            date_to=date(2026, 10, 21),
+            restated_through=restated,
+            report_id="rep_2",
+        )
+        _, state = self._commit(second, LATER)
+        self.assertIsNone(state.settled_through)
+        self.assertEqual(state.loaded_through, date(2026, 10, 21))
+        self.assertEqual(state.loaded_from, date(2026, 10, 8))
+        self.assertEqual(state.last_date_from, date(2026, 10, 15))
+        now = datetime(2026, 10, 21, 15, 0, tzinfo=timezone.utc)
+        windows = plan_extract_windows(now_utc=now, state=state)
+        self.assertEqual(windows[0].date_from, date(2026, 10, 8))
+        self.assertEqual(windows[-1].date_to, date(2026, 10, 21))
+        dates: list[date] = []
+        for window in windows:
+            cursor = window.date_from
+            while cursor <= window.date_to:
+                dates.append(cursor)
+                cursor += timedelta(days=1)
+        self.assertEqual(dates[0], date(2026, 10, 8))
+        self.assertEqual(len(dates), (date(2026, 10, 21) - date(2026, 10, 8)).days + 1)
+
+    def test_never_settled_partial_chunk_recovers_from_coverage_start(self) -> None:
+        restated = date(2026, 10, 8)
+        first = _snapshot(
+            (_row(report_date=date(2026, 10, 8)),),
+            date_from=date(2026, 10, 8),
+            date_to=date(2026, 10, 14),
+            restated_through=restated,
+        )
+        _, state = self._commit(first)
+        self.assertIsNone(state.settled_through)
+        self.assertEqual(state.loaded_from, date(2026, 10, 8))
+        self.assertEqual(state.loaded_through, date(2026, 10, 14))
+        now = datetime(2026, 10, 21, 15, 0, tzinfo=timezone.utc)
+        windows = plan_extract_windows(now_utc=now, state=state)
+        self.assertEqual(windows[0].date_from, date(2026, 10, 8))
+        self.assertEqual(windows[-1].date_to, date(2026, 10, 21))
+        self.assertEqual(windows[1].date_from, date(2026, 10, 15))
+
+    def test_legacy_checkpoint_without_loaded_from(self) -> None:
+        with connection(self.settings) as conn:
+            conn.execute(
+                sql.SQL(
+                    "INSERT INTO {} (key, value, updated_at) VALUES (%s, %s, %s)"
+                ).format(sql.Identifier(TEST_SCHEMA, "extract_state")),
+                (
+                    "partner_report",
+                    Json(
+                        {
+                            "loaded_through": "2026-10-21",
+                            "settled_through": None,
+                            "currency": "EUR",
+                            "reporting_timezone": MOCK_ACCOUNT_TIMEZONE,
+                            "account_id": "acct_5512",
+                            "last_report_id": "rep_1",
+                            "last_extracted_at": EXTRACTED_AT.isoformat(),
+                            "last_data_version": 42,
+                            "last_restated_through": "2026-10-08",
+                            "last_date_from": "2026-10-15",
+                            "last_date_to": "2026-10-21",
+                        }
+                    ),
+                    EXTRACTED_AT,
+                ),
+            )
+            conn.commit()
+            state = read_state(conn, schema=TEST_SCHEMA)
+        self.assertEqual(state.loaded_from, date(2026, 10, 15))
+        self.assertIsNone(state.settled_through)
+
     def test_pending_checkpoint_log_is_not_commit(self) -> None:
         snapshot = _snapshot(
             (_row(report_date=date(2026, 10, 21)),),
@@ -295,6 +387,7 @@ class ExtractStateTest(unittest.TestCase):
         _, state = self._commit(backfill, LATER)
         self.assertEqual(state.settled_through, date(2026, 10, 18))
         self.assertEqual(state.loaded_through, date(2026, 10, 21))
+        self.assertEqual(state.loaded_from, date(2026, 10, 15))
         self.assertEqual(state.next_incremental_start, date(2026, 10, 19))
         with connection(self.settings) as conn:
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 2)), 1)

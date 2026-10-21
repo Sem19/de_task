@@ -45,6 +45,9 @@ class ExtractState:
             including mutable days. The first successful window sets this
             baseline. A later island does not jump it across a gap.
             ``None`` before the first success.
+        loaded_from: Inclusive start of that same contiguous prefix.
+            Later chunks and historical islands with a gap do not move it
+            forward. Used to replan when nothing has settled yet.
         settled_through: Inclusive end of immutable dates in that same
             contiguous prefix. Next incremental start is the following day.
             Historical backfills do not move this cursor forward.
@@ -60,6 +63,7 @@ class ExtractState:
     """
 
     loaded_through: date | None
+    loaded_from: date
     settled_through: date | None
     currency: str
     reporting_timezone: str
@@ -165,6 +169,7 @@ def _next_state(
 ) -> ExtractState:
     return ExtractState(
         loaded_through=_next_loaded_through(current, snapshot),
+        loaded_from=_next_loaded_from(current, snapshot),
         settled_through=_next_settled_through(current, snapshot),
         currency=snapshot.currency if current is None else current.currency,
         reporting_timezone=(
@@ -194,6 +199,34 @@ def _next_loaded_through(
     if previous is None:
         return snapshot.date_to
     return max(previous, snapshot.date_to)
+
+
+def _next_loaded_from(
+    current: ExtractState | None, snapshot: ValidatedReport
+) -> date:
+    """Return the start of contiguous loaded coverage.
+
+    The first window is the baseline. A later adjoining chunk keeps the
+    earliest start. A gapped historical island does not pretend the hole
+    was loaded.
+    """
+    if current is None:
+        return snapshot.date_from
+    previous_start = current.loaded_from
+    previous_end = current.loaded_through
+    if previous_end is None:
+        return min(previous_start, snapshot.date_from)
+    if _overlaps_or_adjoins(
+        previous_start, previous_end, snapshot.date_from, snapshot.date_to
+    ):
+        return min(previous_start, snapshot.date_from)
+    return previous_start
+
+
+def _overlaps_or_adjoins(
+    prefix_start: date, prefix_end: date, date_from: date, date_to: date
+) -> bool:
+    return date_from <= prefix_end + _ONE_DAY and date_to >= prefix_start - _ONE_DAY
 
 
 def _next_settled_through(
@@ -262,6 +295,7 @@ def _to_payload(state: ExtractState) -> dict[str, object]:
         raise StorageError("last_extracted_at must be timezone-aware")
     return {
         "loaded_through": _iso(state.loaded_through),
+        "loaded_from": state.loaded_from.isoformat(),
         "settled_through": _iso(state.settled_through),
         "currency": state.currency,
         "reporting_timezone": state.reporting_timezone,
@@ -278,8 +312,14 @@ def _to_payload(state: ExtractState) -> dict[str, object]:
 def _from_payload(payload: dict[str, object]) -> ExtractState:
     extracted_raw = str(payload["last_extracted_at"])
     extracted_at = datetime.fromisoformat(extracted_raw)
+    loaded_from_raw = payload.get("loaded_from")
+    if loaded_from_raw is None:
+        loaded_from = parse_calendar_date(str(payload["last_date_from"]))
+    else:
+        loaded_from = parse_calendar_date(str(loaded_from_raw))
     return ExtractState(
         loaded_through=_optional_date(payload.get("loaded_through")),
+        loaded_from=loaded_from,
         settled_through=_optional_date(payload.get("settled_through")),
         currency=str(payload["currency"]),
         reporting_timezone=str(payload["reporting_timezone"]),
