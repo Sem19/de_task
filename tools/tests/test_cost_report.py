@@ -9,6 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from audit import collect_findings
+from audit.sql_ast import retention_days
 from cost import BYTES_PER_TIB, calculate_estate, present_usd, sum_published
 from cost.render import render_cost
 from cost.scenarios import build_cost_analysis
@@ -35,8 +36,8 @@ def test_report_totals_and_ranking_follow_the_engine(tmp_path: Path) -> None:
             continue
         assert f"${present_usd(slice_cost.normalized_daily_run_rate_usd)}" in text
     ranked = [config.config_id for config in estate.configs]
-    block = text.split("4. Lineage route", maxsplit=1)[0]
-    positions = [block.index(config_id) for config_id in ranked]
+    appendix = text.split("Appendix. Full per-config ranking", maxsplit=1)[1]
+    positions = [appendix.index(config_id) for config_id in ranked]
     assert positions == sorted(positions)
     assert analysis.ranked_configs[0].config_id == ranked[0]
     assert "no daily rate" in text
@@ -72,6 +73,8 @@ def test_changing_recorded_bytes_changes_the_ranking_and_the_total(
     assert low_total in low_high_text
     assert low_total not in high_low_text
     assert high_total in high_low_text
+    assert "Largest cost driver: sq_b" in low_high_text
+    assert "Largest cost driver: sq_a" in high_low_text
 
 
 def test_equal_daily_rates_rank_by_config_id(tmp_path: Path) -> None:
@@ -85,7 +88,7 @@ def test_equal_daily_rates_rank_by_config_id(tmp_path: Path) -> None:
         [("marts.a", "dashboard", "a"), ("marts.b", "dashboard", "b")],
     )
     assert [config.config_id for config in analysis.ranked_configs] == ["sq_a", "sq_b"]
-    block = text.split("4. Lineage route", maxsplit=1)[0]
+    block = text.split("6. Lineage route", maxsplit=1)[0]
     assert block.index("sq_a") < block.index("sq_b")
 
 
@@ -122,6 +125,12 @@ def test_scenarios_are_priced_from_observed_rates(tmp_path: Path) -> None:
     assert member.daily_savings_usd == Decimal("6.25")
     assert "was not measured" in hourly.uncertainty
     assert "Scenarios are not additive." in text
+    assert "not a guaranteed saving" in text
+    assert "not a recommended action" in text
+    before, rest = text.split("4a. Operational cleanup", maxsplit=1)
+    cleanup, _savings = rest.split("5. Savings scenarios", maxsplit=1)
+    assert "stop-zero-scan-failures" not in before
+    assert "stop-zero-scan-failures" in cleanup
 
     keys = [
         (
@@ -160,6 +169,43 @@ def test_competing_writer_follow_whichever_rate_is_lower(tmp_path: Path) -> None
         "sq_high",
     )
     assert render_cost(cheaper_low) != render_cost(cheaper_high)
+
+
+def test_driver_review_follows_sql_and_catalog_without_a_savings_percent(
+    tmp_path: Path,
+) -> None:
+    sql = """-- daily rebuild of events
+-- owner: owner@acme.co
+SELECT DATE(event_ts) AS event_date, COUNT(*) AS events
+FROM `raw.events`
+WHERE DATE(event_ts) >= DATE_SUB(CURRENT_DATE(), INTERVAL 1095 DAY)
+GROUP BY 1
+"""
+    analysis, text, _estate = _analyze(
+        tmp_path,
+        [_spec("sq_wide", "marts", "wide", sql, schedule="every 1 hours")],
+        [
+            _run("sq_wide", "a", _TIB * 4, when="2026-06-01T01:00:00+00:00"),
+            _run("sq_wide", "b", _TIB * 4, when="2026-06-01T02:00:00+00:00"),
+        ],
+        [("marts.wide", "dashboard", "wide")],
+        ["raw.events,BASE TABLE,1,2,_PARTITIONTIME,,2026-01-01,2026-01-01,1"],
+    )
+    review = analysis.driver_reviews[0]
+    assert review.config_id == "sq_wide"
+    assert "_PARTITIONTIME" in review.scan_volume
+    assert "1095" in review.scan_volume
+    assert "hourly" in review.processing_pattern
+    assert "daily" in review.processing_pattern
+    assert "%" not in review.investigation
+    assert (
+        review.daily_cost_usd
+        == analysis.ranked_configs[0].normalized_daily_run_rate_usd
+    )
+    assert "Largest cost driver: sq_wide" in text
+    assert "not a recommended action" in text
+    assert analysis.recommendations[0].heading == "Investigate sq_wide"
+    assert analysis.recommendations[0].conditionally_avoidable_usd is None
 
 
 def test_revenue_route_excludes_a_query_that_only_shares_a_source(
@@ -209,9 +255,7 @@ def test_a_config_with_no_runs_is_not_printed_as_zero_cost(tmp_path: Path) -> No
     _analysis, text, _estate = _analyze(
         tmp_path, _fixture_specs(), _fixture_runs(), _fixture_usage()
     )
-    ranking = text.split("3. Daily cost ranking", maxsplit=1)[1].split(
-        "4. Lineage route", maxsplit=1
-    )[0]
+    ranking = text.split("Appendix. Full per-config ranking", maxsplit=1)[1]
     idle_off = ranking.split("sq_off", maxsplit=1)[1].split("\n", maxsplit=1)[0]
     assert "no observed runs" in idle_off
     assert "$0.0000" not in idle_off
@@ -233,6 +277,7 @@ def test_generator_source_has_no_estate_specific_totals() -> None:
     for name in (
         "cost/scenarios.py",
         "cost/render.py",
+        "cost/drivers.py",
         "cost/report_models.py",
         "cost_report.py",
     ):
@@ -249,13 +294,26 @@ def test_real_estate_report_matches_the_engine_and_is_stable() -> None:
     second = build_report(root)
     assert first == second
     assert _digest(root) == before
-    estate = calculate_estate(load_inventory(root))
+    inventory = load_inventory(root)
+    estate = calculate_estate(inventory)
     assert f"Queries: {estate.query_count}" in first
     assert f"${present_usd(estate.normalized_daily_run_rate_usd)}" in first
     assert "not an invoice" in first
-    assert "Scenarios are not additive." in first
-    assert "was not measured" in first
-    block = first.split("4. Lineage route", maxsplit=1)[0]
+    assert "1. Executive summary" in first
+    assert "These totals represent spending associated" in first
+    assert "not a guaranteed saving" in first
+    assert "not a recommended action" in first
+    assert "Appendix. Full per-config ranking" in first
+    assert "_PARTITIONTIME" in first
+    top = next(
+        query
+        for query in inventory.queries
+        if query.config_id == estate.configs[0].config_id
+    )
+    lookback = retention_days(top.sql_text)
+    if lookback.days is not None:
+        assert str(lookback.days) in first
+    block = first.split("6. Lineage route", maxsplit=1)[0]
     ranked = [
         config.config_id
         for config in estate.configs
@@ -277,8 +335,9 @@ def _analyze(
     specs: list[dict[str, object]],
     runs: list[dict[str, str]],
     usage: list[tuple[str, str, str]],
+    catalog: list[str] | None = None,
 ):
-    inventory = _load(root, specs, runs, usage)
+    inventory = _load(root, specs, runs, usage, catalog)
     parses = parse_inventory(inventory)
     graph = build_graph(inventory, parses)
     estate = calculate_estate(inventory)
@@ -402,6 +461,7 @@ def _load(
     specs: list[dict[str, object]],
     runs: list[dict[str, str]],
     usage: list[tuple[str, str, str]],
+    catalog: list[str] | None = None,
 ):
     sql_dir = root / "scheduled_queries"
     sql_dir.mkdir(parents=True)
@@ -445,9 +505,10 @@ def _load(
     (root / "downstream_usage.csv").write_text(
         "\n".join(usage_lines) + "\n", encoding="utf-8"
     )
-    (root / "table_catalog.csv").write_text(
-        ",".join(CATALOG_COLUMNS) + "\n", encoding="utf-8"
-    )
+    catalog_text = ",".join(CATALOG_COLUMNS) + "\n"
+    if catalog:
+        catalog_text += "\n".join(catalog) + "\n"
+    (root / "table_catalog.csv").write_text(catalog_text, encoding="utf-8")
     (root / "schemas.json").write_text("{}", encoding="utf-8")
     return load_inventory(root)
 

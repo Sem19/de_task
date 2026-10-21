@@ -5,35 +5,662 @@ Regenerate: python -m cost_report
 
 Figures are estimates from run_history.total_bytes_processed.
 They are not an invoice and they are not a forecast of future spend.
-Pricing from the cost engine: $6.25 per TiB (1099511627776 bytes). Minimum billed bytes
-  for a successful execution with a positive recorded byte count: 10000000. Failed
-  executions and successful zero-byte executions are estimated at zero. Display amounts
-  are rounded half-up from the unrounded estimates.
 
-1. Daily run-rate
+1. Executive summary
+Estimated normalized daily cost: $1423.51
+Normalized daily scanned volume: 227.7608 TiB
+Historical estimated cost: $45737.93
+Largest cost driver: sq_3030 (marts.daily_rebuild_events_wide, hourly) $611.66 / day, 97.8655 TiB.
+Highest-priority cost optimization investigations:
+  sq_3030 (marts.daily_rebuild_events_wide, hourly) $611.66 / day. Investigate a
+  predicate on the catalog partition column for raw.events (_PARTITIONTIME).
+  sq_3007 (marts.events_hourly_unpart, hourly) $144.96 / day. Investigate a predicate on
+  the catalog partition column for raw.events (_PARTITIONTIME).
+  sq_3025 (staging.stg_events_hourly, hourly) $77.94 / day. Investigate a predicate on
+  the catalog partition column for raw.events (_PARTITIONTIME).
+  sq_3011 (marts.payment_attempts_unpart, hourly) $64.06 / day. Investigate a predicate
+  on the catalog partition column for raw.payments (_PARTITIONTIME).
+Conditional avoidable scan-cost opportunities:
+  stop-no-recorded-consumer: $39.41 / day observed scan cost. Conditionally avoidable if
+  an owner confirms that no reader was missed. This is not a guaranteed saving.
+Hourly-to-daily arithmetic is a hypothetical scenario in section 5. It is not a
+  recommended action and it is not listed here as avoidable cost.
+
+2. Methodology
 Queries: 129
 Configurations with a daily rate: 128
 Configurations with no observed runs: 1
 Configurations with missing cost evidence: 1
-Normalized daily scanned TiB: 227.7608 TiB
-Normalized daily estimated cost: $1423.51
-Historical estimated cost: $45737.93
+Pricing from the cost engine: $6.25 per TiB (1099511627776 bytes). Minimum billed bytes
+  for a successful execution with a positive recorded byte count: 10000000. Failed
+  executions and successful zero-byte executions are estimated at zero. Display amounts
+  are rounded half-up from the unrounded estimates.
 The estate daily rate is the sum of per-configuration rates. Each configuration uses its
   own observed schedule dates. Historical cost is not divided by one shared window. A
   configuration with no executions has no daily rate. That is not a recorded cost of
   zero.
-
-2. Where the cost sits
+Observed query cost is the engine's normalized daily rate. Conditionally avoidable cost
+  is that rate for queries whose destination has no recorded reader, and only if an
+  owner confirms the extract is complete. A hypothetical difference assumes a
+  replacement scan that was not run. Operational cleanup covers failing schedules whose
+  estimated scan cost is already zero.
 By schedule frequency:
   daily: 97 configurations, 96 with a daily rate, 54.3344 TiB / day, $339.59 / day
   hourly: 32 configurations, 32 with a daily rate, 173.4264 TiB / day, $1083.91 / day
   other: 0 configurations, 0 with a daily rate, no daily rate
 By enabled state:
   enabled: 128 configurations, 128 with a daily rate, 227.7608 TiB / day, $1423.51 / day
-  disabled: 1 configurations, 0 with a daily rate, no daily rate
+  disabled: 1 configuration, 0 with a daily rate, no daily rate
   unknown: 0 configurations, 0 with a daily rate, no daily rate
 
-3. Daily cost ranking
+3. Top 10 cost contributors
+Order is normalized daily cost descending, then config_id.
+Shown: 10 of 128 with a daily rate.
+  1. sq_3030 hourly marts.daily_rebuild_events_wide $611.6592 / day 97.8655 TiB 14
+  observed dates, span 14, contiguous True, 336 executions, 1 failed,
+  scheduled_queries/sq_3030__marts__daily_rebuild_events_wide.sql
+  2. sq_3007 hourly marts.events_hourly_unpart $144.9608 / day 23.1937 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 6 failed,
+  scheduled_queries/sq_3007__marts__events_hourly_unpart.sql
+  3. sq_3025 hourly staging.stg_events_hourly $77.9371 / day 12.4699 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3025__staging__stg_events_hourly.sql
+  4. sq_3011 hourly marts.payment_attempts_unpart $64.0639 / day 10.2502 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3011__marts__payment_attempts_unpart.sql
+  5. sq_3014 hourly marts.funnel_hourly_core $26.7254 / day 4.2761 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3014__marts__funnel_hourly_core.sql
+  6. sq_1026 daily reports.events_daily_wide $26.2245 / day 4.1959 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1026__reports__events_daily_wide.sql
+  7. sq_3015 hourly marts.funnel_hourly_lang $25.8842 / day 4.1415 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3015__marts__funnel_hourly_lang.sql
+  8. sq_3016 hourly marts.funnel_hourly_utm $25.0878 / day 4.0140 TiB 14 observed dates,
+  span 14, contiguous True, 336 executions, 5 failed,
+  scheduled_queries/sq_3016__marts__funnel_hourly_utm.sql
+  9. sq_1014 daily reports.channel_report_qtd $19.6178 / day 3.1389 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1014__reports__channel_report_qtd.sql
+  10. sq_1010 daily reports.reads_daily_full $18.2155 / day 2.9145 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1010__reports__reads_daily_full.sql
+
+4. Prioritized engineering recommendations
+Priority follows evidence from the largest drivers, then owner confirmation, then
+  replacement decisions. The hypothetical hourly difference is not a priority action.
+  Amounts are observed query cost unless a line says the cost is conditionally
+  avoidable.
+  1. Investigate sq_3030
+    Observed daily query cost: $611.66
+    Conditionally avoidable daily scan cost: unmeasured
+    Configs: sq_3030
+    Investigate a predicate on the catalog partition column for raw.events
+  (_PARTITIONTIME). Compare a BigQuery dry run with the current statement. This report
+  does not estimate the byte change. Investigate whether the hourly schedule has to
+  rebuild this window. The statement is not limited to the latest hour. Confirm whether
+  the hourly schedule is still required. The SQL comment describes daily work.
+  2. Investigate sq_3007
+    Observed daily query cost: $144.96
+    Conditionally avoidable daily scan cost: unmeasured
+    Configs: sq_3007
+    Investigate a predicate on the catalog partition column for raw.events
+  (_PARTITIONTIME). Compare a BigQuery dry run with the current statement. This report
+  does not estimate the byte change. Investigate whether the hourly schedule has to
+  rebuild this window. The statement is not limited to the latest hour.
+  3. Investigate sq_3025
+    Observed daily query cost: $77.94
+    Conditionally avoidable daily scan cost: unmeasured
+    Configs: sq_3025
+    Investigate a predicate on the catalog partition column for raw.events
+  (_PARTITIONTIME). Compare a BigQuery dry run with the current statement. This report
+  does not estimate the byte change. Investigate whether the hourly schedule has to
+  rebuild this window. The statement is not limited to the latest hour. Investigate
+  whether deduplication has to run on this schedule over the whole filtered window.
+  4. Investigate sq_3011
+    Observed daily query cost: $64.06
+    Conditionally avoidable daily scan cost: unmeasured
+    Configs: sq_3011
+    Investigate a predicate on the catalog partition column for raw.payments
+  (_PARTITIONTIME). Compare a BigQuery dry run with the current statement. This report
+  does not estimate the byte change. Investigate whether the hourly schedule has to
+  rebuild this window. The statement is not limited to the latest hour.
+  5. Confirm queries with no recorded consumer before stopping them
+    Observed daily query cost: $39.41
+    Conditionally avoidable daily scan cost: $39.41
+    Configs: sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012
+    The amount is the observed daily scan cost of those queries. It is conditionally
+  avoidable only if an owner confirms that the usage extract and the graph did not miss
+  a reader. It is not a guaranteed saving. Do not delete the tables. Each destination
+  has no graph read, certain or uncertain, and no downstream_usage row. Queries: 6.
+  6. Compare destinations before stopping a repeated or competing query
+    Observed daily query cost: unmeasured
+    Conditionally avoidable daily scan cost: unmeasured
+    Repeated SQL and competing writers are priced in the scenario section as the
+  observed cost of the copies that would stop. Those figures assume a replacement that
+  was not run. Scenarios: stop-repeated-sql-sq_1016-sq_5010, stop-repeated-sql-
+  sq_1012-sq_5007, stop-repeated-sql-sq_1017-sq_5009, stop-competing-writer-
+  reports.revenue_daily, stop-repeated-sql-sq_0105-sq_0114, stop-repeated-sql-
+  sq_0411-sq_0412-sq_0413, stop-repeated-sql-sq_5016-sq_5017.
+  7. Do not apply the hourly collapse from this report
+    Observed daily query cost: unmeasured
+    Conditionally avoidable daily scan cost: unmeasured
+    The scenario section includes a hypothetical difference for running each hourly
+  query once per observed day. That figure assumes each omitted execution scans the same
+  bytes as the average recorded execution. It is not a recommended action and it is not
+  conditionally avoidable cost.
+  8. Treat zero-scan failures as operational cleanup
+    Observed daily query cost: $0.00
+    Conditionally avoidable daily scan cost: unmeasured
+    Configs: sq_5013, sq_5014, sq_5015
+    These enabled schedules already have an estimated scan cost of zero. Disabling them
+  does not reduce the estimated bill. The failures still need an owner. Do not delete
+  the destination tables. Every recorded execution failed and the estimated daily rate
+  is zero. Queries: 3.
+  Evidence for sq_3030
+    Processing pattern: Schedule: every 1 hours (hourly). Write disposition:
+  WRITE_TRUNCATE. Destination: marts.daily_rebuild_events_wide. Recorded executions: 336
+  across 14 observed schedule dates, 1 failed. SQL comment: [2024] daily rebuild events
+  wide. Owner comment: dmytro.shevchuk@acme.co. The SQL comment contains 'daily' and the
+  transfer schedule is hourly.
+    Scan volume: Reads raw.events. raw.events is partitioned by _PARTITIONTIME in
+  table_catalog.csv. This statement does not filter that column. The outer WHERE lower
+  bound is 1095 days. The statement aggregates. The recorded history repeats the
+  statement more than once on an observed schedule date.
+    Optimization to investigate: Investigate a predicate on the catalog partition column
+  for raw.events (_PARTITIONTIME). Compare a BigQuery dry run with the current
+  statement. This report does not estimate the byte change. Investigate whether the
+  hourly schedule has to rebuild this window. The statement is not limited to the latest
+  hour. Confirm whether the hourly schedule is still required. The SQL comment describes
+  daily work.
+    Freshness and correctness risks: WRITE_TRUNCATE replaces the destination on each
+  successful run. Narrowing the window or the schedule changes which rows the table
+  contains. The destination has a recorded reader in the graph or in
+  downstream_usage.csv. A freshness change can affect that reader.
+    Verification in BigQuery: In BigQuery, dry-run the current SQL and any candidate
+  predicate or schedule. Compare bytes processed and the destination grain. Do not
+  change the schedule from this report alone. Include a predicate on the catalog
+  partition column in that comparison. No reduction is assumed here.
+    Associated audit findings: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER, CR-SCHEMA-COUNT
+    SQL: scheduled_queries/sq_3030__marts__daily_rebuild_events_wide.sql
+  Evidence for sq_3007
+    Processing pattern: Schedule: every 1 hours (hourly). Write disposition:
+  WRITE_APPEND. Destination: marts.events_hourly_unpart. Recorded executions: 336 across
+  14 observed schedule dates, 6 failed. SQL comment: [2024] events hourly unpart. Owner
+  comment: dmytro.shevchuk@acme.co.
+    Scan volume: Reads raw.events. raw.events is partitioned by _PARTITIONTIME in
+  table_catalog.csv. This statement does not filter that column. INTERVAL 7 DAY appears
+  in the SQL. The lookback classifier does not treat the predicate as a simple outer
+  lower bound. The statement aggregates. The recorded history repeats the statement more
+  than once on an observed schedule date.
+    Optimization to investigate: Investigate a predicate on the catalog partition column
+  for raw.events (_PARTITIONTIME). Compare a BigQuery dry run with the current
+  statement. This report does not estimate the byte change. Investigate whether the
+  hourly schedule has to rebuild this window. The statement is not limited to the latest
+  hour.
+    Freshness and correctness risks: WRITE_APPEND adds rows on each run. Changing the
+  schedule can duplicate or skip appended grains. Confirm the destination grain before
+  changing it. The destination has a recorded reader in the graph or in
+  downstream_usage.csv. A freshness change can affect that reader.
+    Verification in BigQuery: In BigQuery, dry-run the current SQL and any candidate
+  predicate or schedule. Compare bytes processed and the destination grain. Do not
+  change the schedule from this report alone. Include a predicate on the catalog
+  partition column in that comparison. No reduction is assumed here.
+    Associated audit findings: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER
+    SQL: scheduled_queries/sq_3007__marts__events_hourly_unpart.sql
+  Evidence for sq_3025
+    Processing pattern: Schedule: every 1 hours (hourly). Write disposition:
+  WRITE_APPEND. Destination: staging.stg_events_hourly. Recorded executions: 336 across
+  14 observed schedule dates, 2 failed. SQL comment: [2024] stg events hourly. Owner
+  comment: dmytro.shevchuk@acme.co.
+    Scan volume: Reads raw.events. raw.events is partitioned by _PARTITIONTIME in
+  table_catalog.csv. This statement does not filter that column. INTERVAL 1 DAY appears
+  in the SQL. The lookback classifier does not treat the predicate as a simple outer
+  lower bound. The statement contains a star select. The statement uses ROW_NUMBER. The
+  recorded history repeats the statement more than once on an observed schedule date.
+    Optimization to investigate: Investigate a predicate on the catalog partition column
+  for raw.events (_PARTITIONTIME). Compare a BigQuery dry run with the current
+  statement. This report does not estimate the byte change. Investigate whether the
+  hourly schedule has to rebuild this window. The statement is not limited to the latest
+  hour. Investigate whether deduplication has to run on this schedule over the whole
+  filtered window.
+    Freshness and correctness risks: WRITE_APPEND adds rows on each run. Changing the
+  schedule can duplicate or skip appended grains. Confirm the destination grain before
+  changing it. ROW_NUMBER runs inside the filtered window. A row whose timestamp falls
+  outside that window does not compete. Confirm that this matches the correction rule
+  before narrowing the filter. The destination has a recorded reader in the graph or in
+  downstream_usage.csv. A freshness change can affect that reader.
+    Verification in BigQuery: In BigQuery, dry-run the current SQL and any candidate
+  predicate or schedule. Compare bytes processed and the destination grain. Do not
+  change the schedule from this report alone. Include a predicate on the catalog
+  partition column in that comparison. No reduction is assumed here.
+    Associated audit findings: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER, CR-SCHEMA-COUNT
+    SQL: scheduled_queries/sq_3025__staging__stg_events_hourly.sql
+  Evidence for sq_3011
+    Processing pattern: Schedule: every 1 hours (hourly). Write disposition:
+  WRITE_TRUNCATE. Destination: marts.payment_attempts_unpart. Recorded executions: 336
+  across 14 observed schedule dates, 2 failed. SQL comment: [2024] payment attempts
+  unpart. Owner comment: dmytro.shevchuk@acme.co.
+    Scan volume: Reads raw.payments. raw.payments is partitioned by _PARTITIONTIME in
+  table_catalog.csv. This statement does not filter that column. INTERVAL 7 DAY appears
+  in the SQL. The lookback classifier does not treat the predicate as a simple outer
+  lower bound. The statement aggregates. The recorded history repeats the statement more
+  than once on an observed schedule date.
+    Optimization to investigate: Investigate a predicate on the catalog partition column
+  for raw.payments (_PARTITIONTIME). Compare a BigQuery dry run with the current
+  statement. This report does not estimate the byte change. Investigate whether the
+  hourly schedule has to rebuild this window. The statement is not limited to the latest
+  hour.
+    Freshness and correctness risks: WRITE_TRUNCATE replaces the destination on each
+  successful run. Narrowing the window or the schedule changes which rows the table
+  contains. The destination has a recorded reader in the graph or in
+  downstream_usage.csv. A freshness change can affect that reader.
+    Verification in BigQuery: In BigQuery, dry-run the current SQL and any candidate
+  predicate or schedule. Compare bytes processed and the destination grain. Do not
+  change the schedule from this report alone. Include a predicate on the catalog
+  partition column in that comparison. No reduction is assumed here.
+    Associated audit findings: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER
+    SQL: scheduled_queries/sq_3011__marts__payment_attempts_unpart.sql
+
+4a. Operational cleanup
+These schedules are not cost-saving opportunities. Their estimated scan cost is already
+  zero. Disabling them does not reduce the bill.
+stop-zero-scan-failures
+  Disable enabled queries whose observed scan cost is already zero
+  Kind: measured. Change: owner_confirmation.
+  Observed daily scan cost: $0.00
+  Retained: none
+  Evidence: Every recorded execution failed and the estimated daily rate is zero.
+  Queries: 3.
+  Assumption: No replacement query is added.
+  Uncertainty: These executions are already estimated at zero scan cost, so disabling
+  them does not reduce the estimated bill. The failure is an operational issue. Do not
+  delete the destination tables.
+    sq_5013 $0.0000 / day observed (daily marts.app_version_adoption)
+    sq_5014 $0.0000 / day observed (daily marts.partner_postback_recon)
+    sq_5015 $0.0000 / day observed (daily marts.session_quality_v1)
+
+5. Savings scenarios
+Scenarios are not additive. One query can appear in more than one.
+Conditionally avoidable cost is observed scan cost that disappears only if the queries
+  stop and no reader was missed. Assumed figures require a replacement that was not
+  measured. The hypothetical hourly difference is not a recommended action.
+Conditionally avoidable
+stop-no-recorded-consumer
+  Stop enabled queries with no recorded consumer
+  Kind: measured. Change: owner_confirmation.
+  Conditionally avoidable daily scan cost: $39.41
+  Retained: none
+  Evidence: Each destination has no graph read, certain or uncertain, and no
+  downstream_usage row. Queries: 6.
+  Assumption: Stopping the schedule removes its observed scan cost. No replacement query
+  is added.
+  Uncertainty: A usage extract can miss a reader. The amount is the observed daily rate
+  of the listed queries and assumes no replacement scan. It is not a guaranteed saving.
+  Do not disable them from this report alone, and do not delete the tables.
+    sq_5010 $16.2244 / day observed (daily marts.legacy_retention_deck)
+    sq_5008 $9.6424 / day observed (daily marts.legacy_country_deck)
+    sq_5007 $5.6263 / day observed (daily marts.legacy_weekly_deck)
+    sq_5011 $4.0328 / day observed (daily marts.legacy_ltv_deck)
+    sq_5009 $2.6297 / day observed (daily marts.legacy_title_deck)
+    sq_5012 $1.2588 / day observed (daily marts.legacy_abtest_deck)
+Assumed replacement, not measured
+stop-repeated-sql-sq_1016-sq_5010
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $16.22
+  Retained: sq_1016
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_1016->reports.cohort_retention_90d, sq_5010->marts.legacy_retention_deck.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5010 $16.2244 / day observed (daily marts.legacy_retention_deck)
+stop-repeated-sql-sq_1012-sq_5007
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $5.63
+  Retained: sq_1012
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_1012->reports.channel_report_weekly, sq_5007->marts.legacy_weekly_deck.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5007 $5.6263 / day observed (daily marts.legacy_weekly_deck)
+stop-repeated-sql-sq_1017-sq_5009
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $2.63
+  Retained: sq_1017
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_1017->reports.title_performance, sq_5009->marts.legacy_title_deck.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5009 $2.6297 / day observed (daily marts.legacy_title_deck)
+stop-competing-writer-reports.revenue_daily
+  Keep one writer of reports.revenue_daily
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $1.77
+  Retained: sq_0104
+  Evidence: The graph records more than one writer of reports.revenue_daily. sq_0104
+  WRITE_TRUNCATE every day 03:10 -> reports.revenue_daily; sq_0105 WRITE_APPEND every 1
+  hours -> reports.revenue_daily.
+  Assumption: Consumers of the table can be served by the retained writer alone.
+  Uncertainty: The retained query is the lowest observed daily rate. config_id breaks
+  ties. The stopped query may project different columns, use a different write
+  disposition, or cover a different window. Whether the retained query can replace it
+  was not measured. Stopping a writer does not delete the table.
+    sq_0105 $1.7748 / day observed (hourly reports.revenue_daily)
+stop-repeated-sql-sq_0105-sq_0114
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $1.77
+  Retained: sq_0114
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_0105->reports.revenue_daily, sq_0114->reports.payment_settle_hourly.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_0105 $1.7748 / day observed (hourly reports.revenue_daily)
+stop-repeated-sql-sq_0411-sq_0412-sq_0413
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $1.50
+  Retained: sq_0413
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_0411->reports.funnel_all_years, sq_0412->reports.funnel_by_device,
+  sq_0413->marts.funnel_wide.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_0412 $0.7529 / day observed (daily reports.funnel_by_device)
+    sq_0411 $0.7515 / day observed (daily reports.funnel_all_years)
+stop-repeated-sql-sq_5016-sq_5017
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Observed daily cost of the queries that would stop: $1.19
+  Retained: sq_5016
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_5016->marts.exec_revenue_board, sq_5017->marts.exec_revenue_board_copy.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5017 $1.1938 / day observed (daily marts.exec_revenue_board_copy)
+Hypothetical, not a recommended action
+one-run-per-observed-day
+  Hypothetical: one execution per observed day for each hourly query
+  Kind: assumed. Change: business_logic.
+  Hypothetical daily difference: $1038.75
+  Retained: none
+  Evidence: The difference for a query is its observed daily rate minus the average cost
+  of one recorded execution. The estate figure is the sum across 32 hourly queries that
+  ran more than once on an observed date.
+  Assumption: A single remaining execution would scan the same bytes as the average
+  recorded execution, not a full extra day of increments.
+  Uncertainty: Each omitted execution is assumed to scan the same bytes as the execution
+  that would remain. A single daily run of an incremental query can scan more than one
+  hourly run. That replacement scan was not measured. This is a hypothetical scenario,
+  not a recommended action, and it is not a forecast of savings.
+    sq_3030 $586.1734 / day observed (336 executions on 14 observed dates;
+  marts.daily_rebuild_events_wide)
+    sq_3007 $138.9207 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_unpart)
+    sq_3025 $74.6898 / day observed (336 executions on 14 observed dates;
+  staging.stg_events_hourly)
+    sq_3011 $61.3945 / day observed (336 executions on 14 observed dates;
+  marts.payment_attempts_unpart)
+    sq_3014 $25.6118 / day observed (336 executions on 14 observed dates;
+  marts.funnel_hourly_core)
+    sq_3015 $24.8057 / day observed (336 executions on 14 observed dates;
+  marts.funnel_hourly_lang)
+    sq_3016 $24.0424 / day observed (336 executions on 14 observed dates;
+  marts.funnel_hourly_utm)
+    sq_3018 $12.8672 / day observed (336 executions on 14 observed dates;
+  marts.events_app_raw_hourly)
+    sq_3019 $12.2109 / day observed (336 executions on 14 observed dates;
+  marts.events_search_raw_hourly)
+    sq_3024 $9.2378 / day observed (336 executions on 14 observed dates;
+  marts.revenue_intraday_usd)
+    sq_3023 $9.2258 / day observed (336 executions on 14 observed dates;
+  marts.revenue_intraday_eur)
+    sq_3027 $6.3122 / day observed (336 executions on 14 observed dates;
+  staging.stg_reads_hourly)
+    sq_3021 $5.7548 / day observed (336 executions on 14 observed dates;
+  marts.reads_hourly_device)
+    sq_3020 $5.6827 / day observed (336 executions on 14 observed dates;
+  marts.reads_hourly_genre)
+    sq_3026 $4.2679 / day observed (336 executions on 14 observed dates;
+  staging.stg_payments_hourly)
+    sq_3003 $3.7002 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_device)
+    sq_3017 $3.5298 / day observed (336 executions on 14 observed dates;
+  marts.funnel_hourly_country)
+    sq_3005 $3.1387 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_utm)
+    sq_3009 $2.8506 / day observed (336 executions on 14 observed dates;
+  marts.payment_attempts_by_proc)
+    sq_3022 $2.5772 / day observed (336 executions on 14 observed dates;
+  marts.subs_snapshot_hourly)
+    sq_3029 $2.5547 / day observed (336 executions on 14 observed dates;
+  marts.plan_mix_hourly)
+    sq_3006 $2.0077 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_exp)
+    sq_3001 $2.0021 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_core)
+    sq_3002 $1.9830 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_country)
+    sq_3004 $1.9763 / day observed (336 executions on 14 observed dates;
+  marts.events_hourly_lang)
+    sq_3028 $1.7058 / day observed (336 executions on 14 observed dates;
+  staging.stg_users_hourly)
+    sq_0105 $1.7008 / day observed (336 executions on 14 observed dates;
+  reports.revenue_daily)
+    sq_0114 $1.5922 / day observed (336 executions on 14 observed dates;
+  reports.payment_settle_hourly)
+    sq_3012 $1.5702 / day observed (336 executions on 14 observed dates;
+  marts.revenue_hourly_topup)
+    sq_3013 $1.5636 / day observed (336 executions on 14 observed dates;
+  marts.settle_rate_hourly)
+    sq_3010 $1.5513 / day observed (336 executions on 14 observed dates;
+  marts.payment_attempts_retry)
+    sq_3008 $1.5498 / day observed (336 executions on 14 observed dates;
+  marts.payment_attempts_hourly)
+
+6. Lineage route for revenue_daily
+The route is the scheduled-query ancestors of that exact table name, every writer of the
+  table, and scheduled-query descendants. Dashboard and ad-hoc consumers are excluded.
+  Queries that only share an upstream source are excluded.
+Queries on the route: 10
+Normalized daily scanned TiB: 0.9256 TiB
+Normalized daily estimated cost: $5.79
+Queries on the route with no daily rate: none
+  sq_0101 daily staging.stg_payments $1.9097 / day 0.3056 TiB
+  scheduled_queries/sq_0101__staging__stg_payments.sql
+  sq_0105 hourly reports.revenue_daily $1.7748 / day 0.2840 TiB
+  scheduled_queries/sq_0105__reports__revenue_daily.sql
+  sq_0104 daily reports.revenue_daily $1.2009 / day 0.1921 TiB
+  scheduled_queries/sq_0104__reports__revenue_daily.sql
+  sq_0102 daily staging.stg_subscriptions $0.2987 / day 0.0478 TiB
+  scheduled_queries/sq_0102__staging__stg_subscriptions.sql
+  sq_0112 daily reports.kpi_snapshot $0.1855 / day 0.0297 TiB
+  scheduled_queries/sq_0112__reports__kpi_snapshot.sql
+  sq_5001 daily marts.revenue_unified $0.1570 / day 0.0251 TiB
+  scheduled_queries/sq_5001__marts__revenue_unified.sql
+  sq_0106 daily reports.revenue_by_region $0.1391 / day 0.0222 TiB
+  scheduled_queries/sq_0106__reports__revenue_by_region.sql
+  sq_5005 daily marts.exec_kpi_v2 $0.0631 / day 0.0101 TiB
+  scheduled_queries/sq_5005__marts__exec_kpi_v2.sql
+  sq_0111 daily reports.exec_kpi_daily $0.0504 / day 0.0081 TiB
+  scheduled_queries/sq_0111__reports__exec_kpi_daily.sql
+  sq_0103 daily staging.stg_fx_daily $0.0062 / day 0.0010 TiB
+  scheduled_queries/sq_0103__staging__stg_fx_daily.sql
+Queries that share an upstream source and are outside the route: sq_3011, sq_1014,
+  sq_5010, sq_1016, sq_4023, sq_3023, sq_1015, sq_4018, sq_4017, sq_1020, sq_1012,
+  sq_5007, sq_3026, sq_0109, sq_4012, sq_1027, sq_4013, sq_4011, sq_3009, sq_3022,
+  sq_3029, sq_1011, sq_1013, sq_4010, sq_0114, sq_3012, sq_3013, sq_3010, sq_3008,
+  sq_4007, sq_4008, sq_4002, sq_4005, sq_5012, sq_4001, sq_4004, sq_4003, sq_4006,
+  sq_5017, sq_0108, sq_5016, sq_4020, sq_4009, sq_0113, sq_4019, sq_1028, sq_0202,
+  sq_5018, sq_0501, sq_1023, sq_0503, sq_0502, sq_4021, sq_5019. Their normalized daily
+  estimated cost, excluded from the route: $241.96.
+
+7. Audit findings and associated spend
+These totals represent spending associated with the queries the finding names. They are
+  the observed daily cost of those queries. They are not the estimated saving from the
+  audit recommendation, and they are not conditionally avoidable cost unless a scenario
+  above stops those queries and says so.
+Findings that name a reviewed cost driver:
+  sq_3030: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER, CR-SCHEMA-COUNT
+  sq_3007: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER
+  sq_3025: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER, CR-SCHEMA-COUNT
+  sq_3011: OP-RESOURCES-EXCEEDED, OP-PARTITION-FILTER
+  OP-PARTITION-FILTER P3 needs_verification associated spend $1406.1499 / day configs:
+  sq_0101, sq_0105, sq_0107, sq_0108, sq_0109, sq_0110, sq_0114, sq_0301, sq_0401,
+  sq_0402, sq_0403, sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1006, sq_1007,
+  sq_1008, sq_1009, sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016,
+  sq_1017, sq_1018, sq_1019, sq_1020, sq_1021, sq_1022, sq_1024, sq_1025, sq_1026,
+  sq_1027, sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008,
+  sq_3009, sq_3010, sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017,
+  sq_3018, sq_3019, sq_3020, sq_3021, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027,
+  sq_3030, sq_4001, sq_4002, sq_4003, sq_4004, sq_4005, sq_4006, sq_4007, sq_4008,
+  sq_4009, sq_4010, sq_4011, sq_4012, sq_4013, sq_4014, sq_4015, sq_4016, sq_4017,
+  sq_4018, sq_4022, sq_4023, sq_4024, sq_5004, sq_5007, sq_5008, sq_5009, sq_5010,
+  sq_5011, sq_5012, sq_5013, sq_5014, sq_5015, sq_5016, sq_5017, sq_5018, sq_5019.
+  Missing daily rate: sq_5019.
+    Partition predicates are missing or not bound to each partitioned source
+  OP-RESOURCES-EXCEEDED P2 confirmed associated spend $1150.9061 / day configs: sq_0105,
+  sq_0109, sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008,
+  sq_3009, sq_3010, sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017,
+  sq_3018, sq_3020, sq_3021, sq_3022, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027,
+  sq_3028, sq_3029, sq_3030, sq_4001, sq_4003, sq_4004, sq_4005, sq_4006, sq_4009,
+  sq_4010, sq_4011, sq_4012, sq_4013, sq_4014, sq_4016, sq_4017, sq_4018, sq_4019,
+  sq_4020, sq_4021, sq_4022, sq_4023, sq_4024.
+    Run history records Resources exceeded failures
+  CR-SCHEMA-COUNT P2 indicated associated spend $1142.8246 / day configs: sq_0101,
+  sq_0102, sq_0103, sq_0104, sq_0105, sq_0108, sq_0109, sq_0113, sq_0114, sq_0201,
+  sq_0202, sq_0301, sq_0302, sq_0303, sq_0401, sq_0402, sq_0403, sq_0411, sq_0412,
+  sq_0413, sq_0501, sq_0502, sq_0503, sq_1001, sq_1002, sq_1003, sq_1004, sq_1005,
+  sq_1008, sq_1009, sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016,
+  sq_1017, sq_1018, sq_1019, sq_1020, sq_1023, sq_1024, sq_1025, sq_1026, sq_1027,
+  sq_1028, sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3008, sq_3009,
+  sq_3010, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3020, sq_3021,
+  sq_3022, sq_3023, sq_3025, sq_3027, sq_3028, sq_3029, sq_3030, sq_4002, sq_4003,
+  sq_4004, sq_4005, sq_4006, sq_4007, sq_4008, sq_4009, sq_4010, sq_4011, sq_4012,
+  sq_4013, sq_4014, sq_4015, sq_4016, sq_4018, sq_4019, sq_4020, sq_4021, sq_4022,
+  sq_4023, sq_4024, sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5012, sq_5013,
+  sq_5014, sq_5015, sq_5016, sq_5017, sq_5018, sq_5019. Missing daily rate: sq_5019.
+    Outermost SELECT lists do not match catalog column counts
+  MN-RETIRE-NO-RECORDED-CONSUMER P3 needs_verification associated spend $39.4143 / day
+  configs: sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012.
+    Enabled queries have no consumer in the supplied graph or usage extract
+  MN-REPEATED-SQL-sq_1016-sq_5010 P3 confirmed associated spend $32.3638 / day configs:
+  sq_1016, sq_5010.
+    Scheduled queries share the same SQL text
+  CR-UNPARSEABLE-SQL P1 confirmed associated spend $18.9274 / day configs: sq_0107,
+  sq_0110, sq_3024, sq_5011.
+    sqlglot cannot parse 4 scheduled queries
+  MN-REPEATED-SQL-sq_1012-sq_5007 P3 confirmed associated spend $11.3058 / day configs:
+  sq_1012, sq_5007.
+    Scheduled queries share the same SQL text
+  CR-ROW-NUMBER-NO-ORDER P2 confirmed associated spend $6.8854 / day configs: sq_0102,
+  sq_3027.
+    ROW_NUMBER has no ORDER BY
+  MN-REPEATED-SQL-sq_1017-sq_5009 P3 confirmed associated spend $5.2744 / day configs:
+  sq_1017, sq_5009.
+    Scheduled queries share the same SQL text
+  OP-CYCLE-sq_0301-sq_0302-sq_0303 P2 confirmed associated spend $4.7915 / day configs:
+  sq_0301, sq_0302, sq_0303.
+    Scheduled queries form a dependency cycle
+  CR-SHORT-LOOKBACK-sq_1001 P2 indicated associated spend $3.5099 / day configs:
+  sq_1001, sq_5002.
+    sq_1001 truncates reports.funnel_daily_core on a shorter outer date bound than a reader filters
+  MN-REPEATED-SQL-sq_0105-sq_0114 P3 confirmed associated spend $3.4362 / day configs:
+  sq_0105, sq_0114.
+    Scheduled queries share the same SQL text
+  CR-COLUMN-WRITER-CONFLICT P2 needs_verification associated spend $3.2717 / day
+  configs: sq_0104, sq_0105, sq_0106, sq_5001.
+    Scheduled writers of one table do not project the same columns a reader uses
+  OP-SCHEDULE-OVERLAP-sq_0101-sq_0104 P1 confirmed associated spend $3.1106 / day
+  configs: sq_0101, sq_0104.
+    Matched executions overlap: sq_0101 ends after sq_0104 starts
+  OP-DUPLICATE-WRITER-sq_0104-sq_0105 P1 confirmed associated spend $2.9757 / day
+  configs: sq_0104, sq_0105.
+    reports.revenue_daily has more than one scheduled writer
+  MN-REPEATED-SQL-sq_5016-sq_5017 P3 confirmed associated spend $2.3811 / day configs:
+  sq_5016, sq_5017.
+    Scheduled queries share the same SQL text
+  MN-REPEATED-SQL-sq_0411-sq_0412-sq_0413 P3 confirmed associated spend $2.2538 / day
+  configs: sq_0411, sq_0412, sq_0413.
+    Scheduled queries share the same SQL text
+  OP-SCHEDULE-OVERLAP-sq_0105-sq_5001 P2 confirmed associated spend $1.9317 / day
+  configs: sq_0105, sq_5001.
+    Matched executions overlap: sq_0105 ends after sq_5001 starts
+  OP-SCHEDULE-OVERLAP-sq_0105-sq_0106 P2 confirmed associated spend $1.9138 / day
+  configs: sq_0105, sq_0106.
+    Matched executions overlap: sq_0105 ends after sq_0106 starts
+  OP-SCHEDULE-OVERLAP-sq_0102-sq_0104 P2 confirmed associated spend $1.4996 / day
+  configs: sq_0102, sq_0104.
+    Matched executions overlap: sq_0102 ends after sq_0104 starts
+  CR-SHORT-LOOKBACK-sq_0104 P2 indicated associated spend $1.4969 / day configs:
+  sq_0104, sq_0106, sq_5001.
+    sq_0104 truncates reports.revenue_daily on a shorter outer date bound than a reader filters
+  OP-CYCLE-sq_0201-sq_0202 P2 confirmed associated spend $0.4738 / day configs: sq_0201,
+  sq_0202.
+    Scheduled queries form a dependency cycle
+  CR-COLUMN-NOT-PROJECTED P1 needs_verification associated spend $0.4380 / day configs:
+  sq_0106, sq_0111, sq_0112, sq_5005.
+    Downstream SQL names a column the upstream scheduled SQL does not project
+  OP-SELF-READ-sq_0112 P2 confirmed associated spend $0.1855 / day configs: sq_0112.
+    sq_0112 reads its own destination
+  OP-ALREADY-DISABLED P4 confirmed associated spend $0.0000 / day configs: sq_5019.
+  Missing daily rate: sq_5019.
+    A scheduled query is already disabled and has no recorded consumer
+  OP-CATALOG-GAP-raw-app_versions P2 needs_verification associated spend $0.0000 / day
+  configs: sq_5013.
+    raw.app_versions is read by scheduled SQL and is absent from the supplied catalog
+  OP-CATALOG-GAP-raw-partner_postbacks P2 needs_verification associated spend $0.0000 /
+  day configs: sq_5014.
+    raw.partner_postbacks is read by scheduled SQL and is absent from the supplied catalog
+  OP-CATALOG-GAP-staging-stg_sessions_v1 P2 needs_verification associated spend $0.0000
+  / day configs: sq_5015.
+    staging.stg_sessions_v1 is read by scheduled SQL and is absent from the supplied catalog
+  OP-NOT-FOUND-raw-app_versions P1 confirmed associated spend $0.0000 / day configs:
+  sq_5013.
+    Run history records Not found while reading raw.app_versions
+  OP-NOT-FOUND-raw-partner_postbacks P1 confirmed associated spend $0.0000 / day
+  configs: sq_5014.
+    Run history records Not found while reading raw.partner_postbacks
+  OP-NOT-FOUND-staging-stg_sessions_v1 P1 confirmed associated spend $0.0000 / day
+  configs: sq_5015.
+    Run history records Not found while reading staging.stg_sessions_v1
+
+8. Limitations
+total_bytes_processed is the byte count stored in run history. It is not a BigQuery
+  billing export. Cached bytes, bytes written, and charges for a failed query are not in
+  the supplied files.
+Observed schedule dates that are not contiguous: 0 configurations. A daily rate uses the
+  count of observed dates, not the calendar span from the first date to the last.
+A partition-column gap or a wide lookback is a reason to investigate. It is not a
+  measured saving. The hourly scenario and the writer and repeated-SQL scenarios state a
+  replacement that was not run. The no-consumer figure is not a guaranteed saving,
+  because the usage extract can miss a reader.
+Disabling a schedule is not deleting a table. This report does not select queries for
+  deletion.
+
+Appendix. Full per-config ranking
 Order is normalized daily cost descending, then config_id.
   1. sq_3030 hourly marts.daily_rebuild_events_wide $611.6592 / day 97.8655 TiB 14
   observed dates, span 14, contiguous True, 336 executions, 1 failed,
@@ -422,388 +1049,3 @@ Order is normalized daily cost descending, then config_id.
   129. sq_5019 daily marts.paused_experiment_readout no observed runs unmeasured 0
   observed dates, span None, contiguous None, 0 executions, 0 failed,
   scheduled_queries/sq_5019__marts__paused_experiment_readout.sql
-
-4. Lineage route for revenue_daily
-The route is the scheduled-query ancestors of that exact table name, every writer of the
-  table, and scheduled-query descendants. Dashboard and ad-hoc consumers are excluded.
-  Queries that only share an upstream source are excluded.
-Queries on the route: 10
-Normalized daily scanned TiB: 0.9256 TiB
-Normalized daily estimated cost: $5.79
-Queries on the route with no daily rate: none
-  sq_0101 daily staging.stg_payments $1.9097 / day 0.3056 TiB
-  scheduled_queries/sq_0101__staging__stg_payments.sql
-  sq_0105 hourly reports.revenue_daily $1.7748 / day 0.2840 TiB
-  scheduled_queries/sq_0105__reports__revenue_daily.sql
-  sq_0104 daily reports.revenue_daily $1.2009 / day 0.1921 TiB
-  scheduled_queries/sq_0104__reports__revenue_daily.sql
-  sq_0102 daily staging.stg_subscriptions $0.2987 / day 0.0478 TiB
-  scheduled_queries/sq_0102__staging__stg_subscriptions.sql
-  sq_0112 daily reports.kpi_snapshot $0.1855 / day 0.0297 TiB
-  scheduled_queries/sq_0112__reports__kpi_snapshot.sql
-  sq_5001 daily marts.revenue_unified $0.1570 / day 0.0251 TiB
-  scheduled_queries/sq_5001__marts__revenue_unified.sql
-  sq_0106 daily reports.revenue_by_region $0.1391 / day 0.0222 TiB
-  scheduled_queries/sq_0106__reports__revenue_by_region.sql
-  sq_5005 daily marts.exec_kpi_v2 $0.0631 / day 0.0101 TiB
-  scheduled_queries/sq_5005__marts__exec_kpi_v2.sql
-  sq_0111 daily reports.exec_kpi_daily $0.0504 / day 0.0081 TiB
-  scheduled_queries/sq_0111__reports__exec_kpi_daily.sql
-  sq_0103 daily staging.stg_fx_daily $0.0062 / day 0.0010 TiB
-  scheduled_queries/sq_0103__staging__stg_fx_daily.sql
-Queries that share an upstream source and are outside the route: sq_3011, sq_1014,
-  sq_5010, sq_1016, sq_4023, sq_3023, sq_1015, sq_4018, sq_4017, sq_1020, sq_1012,
-  sq_5007, sq_3026, sq_0109, sq_4012, sq_1027, sq_4013, sq_4011, sq_3009, sq_3022,
-  sq_3029, sq_1011, sq_1013, sq_4010, sq_0114, sq_3012, sq_3013, sq_3010, sq_3008,
-  sq_4007, sq_4008, sq_4002, sq_4005, sq_5012, sq_4001, sq_4004, sq_4003, sq_4006,
-  sq_5017, sq_0108, sq_5016, sq_4020, sq_4009, sq_0113, sq_4019, sq_1028, sq_0202,
-  sq_5018, sq_0501, sq_1023, sq_0503, sq_0502, sq_4021, sq_5019. Their normalized daily
-  estimated cost, excluded from the route: $241.96.
-
-5. Savings scenarios
-Scenarios are not additive. One query can appear in more than one.
-Measured savings are observed daily rates of queries that would stop, with no
-  replacement scan. Assumed savings depend on a replacement or a schedule change that
-  was not executed.
-one-run-per-observed-day
-  Run each hourly query once per observed day
-  Kind: assumed. Change: business_logic.
-  Daily savings: $1038.75
-  Retained: none
-  Evidence: The saving for a query is its observed daily rate minus the average cost of
-  one recorded execution. The estate figure is the sum across 32 hourly queries that ran
-  more than once on an observed date.
-  Assumption: A single remaining execution would scan the same bytes as the average
-  recorded execution, not a full extra day of increments.
-  Uncertainty: Each omitted execution is assumed to scan the same bytes as the execution
-  that would remain. A single daily run of an incremental query can scan more than one
-  hourly run. That replacement scan was not measured. This is not a forecast of savings
-  from changing the schedule.
-    sq_3030 $586.1734 / day (336 executions on 14 observed dates;
-  marts.daily_rebuild_events_wide)
-    sq_3007 $138.9207 / day (336 executions on 14 observed dates;
-  marts.events_hourly_unpart)
-    sq_3025 $74.6898 / day (336 executions on 14 observed dates;
-  staging.stg_events_hourly)
-    sq_3011 $61.3945 / day (336 executions on 14 observed dates;
-  marts.payment_attempts_unpart)
-    sq_3014 $25.6118 / day (336 executions on 14 observed dates;
-  marts.funnel_hourly_core)
-    sq_3015 $24.8057 / day (336 executions on 14 observed dates;
-  marts.funnel_hourly_lang)
-    sq_3016 $24.0424 / day (336 executions on 14 observed dates;
-  marts.funnel_hourly_utm)
-    sq_3018 $12.8672 / day (336 executions on 14 observed dates;
-  marts.events_app_raw_hourly)
-    sq_3019 $12.2109 / day (336 executions on 14 observed dates;
-  marts.events_search_raw_hourly)
-    sq_3024 $9.2378 / day (336 executions on 14 observed dates;
-  marts.revenue_intraday_usd)
-    sq_3023 $9.2258 / day (336 executions on 14 observed dates;
-  marts.revenue_intraday_eur)
-    sq_3027 $6.3122 / day (336 executions on 14 observed dates;
-  staging.stg_reads_hourly)
-    sq_3021 $5.7548 / day (336 executions on 14 observed dates;
-  marts.reads_hourly_device)
-    sq_3020 $5.6827 / day (336 executions on 14 observed dates;
-  marts.reads_hourly_genre)
-    sq_3026 $4.2679 / day (336 executions on 14 observed dates;
-  staging.stg_payments_hourly)
-    sq_3003 $3.7002 / day (336 executions on 14 observed dates;
-  marts.events_hourly_device)
-    sq_3017 $3.5298 / day (336 executions on 14 observed dates;
-  marts.funnel_hourly_country)
-    sq_3005 $3.1387 / day (336 executions on 14 observed dates; marts.events_hourly_utm)
-    sq_3009 $2.8506 / day (336 executions on 14 observed dates;
-  marts.payment_attempts_by_proc)
-    sq_3022 $2.5772 / day (336 executions on 14 observed dates;
-  marts.subs_snapshot_hourly)
-    sq_3029 $2.5547 / day (336 executions on 14 observed dates; marts.plan_mix_hourly)
-    sq_3006 $2.0077 / day (336 executions on 14 observed dates; marts.events_hourly_exp)
-    sq_3001 $2.0021 / day (336 executions on 14 observed dates;
-  marts.events_hourly_core)
-    sq_3002 $1.9830 / day (336 executions on 14 observed dates;
-  marts.events_hourly_country)
-    sq_3004 $1.9763 / day (336 executions on 14 observed dates;
-  marts.events_hourly_lang)
-    sq_3028 $1.7058 / day (336 executions on 14 observed dates;
-  staging.stg_users_hourly)
-    sq_0105 $1.7008 / day (336 executions on 14 observed dates; reports.revenue_daily)
-    sq_0114 $1.5922 / day (336 executions on 14 observed dates;
-  reports.payment_settle_hourly)
-    sq_3012 $1.5702 / day (336 executions on 14 observed dates;
-  marts.revenue_hourly_topup)
-    sq_3013 $1.5636 / day (336 executions on 14 observed dates;
-  marts.settle_rate_hourly)
-    sq_3010 $1.5513 / day (336 executions on 14 observed dates;
-  marts.payment_attempts_retry)
-    sq_3008 $1.5498 / day (336 executions on 14 observed dates;
-  marts.payment_attempts_hourly)
-stop-no-recorded-consumer
-  Stop enabled queries with no recorded consumer
-  Kind: measured. Change: owner_confirmation.
-  Daily savings: $39.41
-  Retained: none
-  Evidence: Each destination has no graph read, certain or uncertain, and no
-  downstream_usage row. Queries: 6.
-  Assumption: Stopping the schedule removes its observed scan cost. No replacement query
-  is added.
-  Uncertainty: A usage extract can miss a reader. The amount is the observed daily rate
-  of the listed queries and assumes no replacement scan. Do not disable them from this
-  report alone, and do not delete the tables.
-    sq_5010 $16.2244 / day (daily marts.legacy_retention_deck)
-    sq_5008 $9.6424 / day (daily marts.legacy_country_deck)
-    sq_5007 $5.6263 / day (daily marts.legacy_weekly_deck)
-    sq_5011 $4.0328 / day (daily marts.legacy_ltv_deck)
-    sq_5009 $2.6297 / day (daily marts.legacy_title_deck)
-    sq_5012 $1.2588 / day (daily marts.legacy_abtest_deck)
-stop-repeated-sql-sq_1016-sq_5010
-  Keep one copy of SQL that is repeated after comment removal
-  Kind: assumed. Change: business_logic.
-  Daily savings: $16.22
-  Retained: sq_1016
-  Evidence: The SQL matches after comment and whitespace removal. Destinations:
-  sq_1016->reports.cohort_retention_90d, sq_5010->marts.legacy_retention_deck.
-  Assumption: The retained destination can stand in for the stopped destinations.
-  Uncertainty: Identical SQL text can write different tables. The retained copy is the
-  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
-  config_id breaks ties. Whether one destination can replace the others was not
-  measured.
-    sq_5010 $16.2244 / day (daily marts.legacy_retention_deck)
-stop-repeated-sql-sq_1012-sq_5007
-  Keep one copy of SQL that is repeated after comment removal
-  Kind: assumed. Change: business_logic.
-  Daily savings: $5.63
-  Retained: sq_1012
-  Evidence: The SQL matches after comment and whitespace removal. Destinations:
-  sq_1012->reports.channel_report_weekly, sq_5007->marts.legacy_weekly_deck.
-  Assumption: The retained destination can stand in for the stopped destinations.
-  Uncertainty: Identical SQL text can write different tables. The retained copy is the
-  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
-  config_id breaks ties. Whether one destination can replace the others was not
-  measured.
-    sq_5007 $5.6263 / day (daily marts.legacy_weekly_deck)
-stop-repeated-sql-sq_1017-sq_5009
-  Keep one copy of SQL that is repeated after comment removal
-  Kind: assumed. Change: business_logic.
-  Daily savings: $2.63
-  Retained: sq_1017
-  Evidence: The SQL matches after comment and whitespace removal. Destinations:
-  sq_1017->reports.title_performance, sq_5009->marts.legacy_title_deck.
-  Assumption: The retained destination can stand in for the stopped destinations.
-  Uncertainty: Identical SQL text can write different tables. The retained copy is the
-  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
-  config_id breaks ties. Whether one destination can replace the others was not
-  measured.
-    sq_5009 $2.6297 / day (daily marts.legacy_title_deck)
-stop-competing-writer-reports.revenue_daily
-  Keep one writer of reports.revenue_daily
-  Kind: assumed. Change: business_logic.
-  Daily savings: $1.77
-  Retained: sq_0104
-  Evidence: The graph records more than one writer of reports.revenue_daily. sq_0104
-  WRITE_TRUNCATE every day 03:10 -> reports.revenue_daily; sq_0105 WRITE_APPEND every 1
-  hours -> reports.revenue_daily.
-  Assumption: Consumers of the table can be served by the retained writer alone.
-  Uncertainty: The retained query is the lowest observed daily rate. config_id breaks
-  ties. The stopped query may project different columns, use a different write
-  disposition, or cover a different window. Whether the retained query can replace it
-  was not measured. Stopping a writer does not delete the table.
-    sq_0105 $1.7748 / day (hourly reports.revenue_daily)
-stop-repeated-sql-sq_0105-sq_0114
-  Keep one copy of SQL that is repeated after comment removal
-  Kind: assumed. Change: business_logic.
-  Daily savings: $1.77
-  Retained: sq_0114
-  Evidence: The SQL matches after comment and whitespace removal. Destinations:
-  sq_0105->reports.revenue_daily, sq_0114->reports.payment_settle_hourly.
-  Assumption: The retained destination can stand in for the stopped destinations.
-  Uncertainty: Identical SQL text can write different tables. The retained copy is the
-  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
-  config_id breaks ties. Whether one destination can replace the others was not
-  measured.
-    sq_0105 $1.7748 / day (hourly reports.revenue_daily)
-stop-repeated-sql-sq_0411-sq_0412-sq_0413
-  Keep one copy of SQL that is repeated after comment removal
-  Kind: assumed. Change: business_logic.
-  Daily savings: $1.50
-  Retained: sq_0413
-  Evidence: The SQL matches after comment and whitespace removal. Destinations:
-  sq_0411->reports.funnel_all_years, sq_0412->reports.funnel_by_device,
-  sq_0413->marts.funnel_wide.
-  Assumption: The retained destination can stand in for the stopped destinations.
-  Uncertainty: Identical SQL text can write different tables. The retained copy is the
-  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
-  config_id breaks ties. Whether one destination can replace the others was not
-  measured.
-    sq_0412 $0.7529 / day (daily reports.funnel_by_device)
-    sq_0411 $0.7515 / day (daily reports.funnel_all_years)
-stop-repeated-sql-sq_5016-sq_5017
-  Keep one copy of SQL that is repeated after comment removal
-  Kind: assumed. Change: business_logic.
-  Daily savings: $1.19
-  Retained: sq_5016
-  Evidence: The SQL matches after comment and whitespace removal. Destinations:
-  sq_5016->marts.exec_revenue_board, sq_5017->marts.exec_revenue_board_copy.
-  Assumption: The retained destination can stand in for the stopped destinations.
-  Uncertainty: Identical SQL text can write different tables. The retained copy is the
-  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
-  config_id breaks ties. Whether one destination can replace the others was not
-  measured.
-    sq_5017 $1.1938 / day (daily marts.exec_revenue_board_copy)
-stop-zero-scan-failures
-  Disable enabled queries whose observed scan cost is already zero
-  Kind: measured. Change: owner_confirmation.
-  Daily savings: $0.00
-  Retained: none
-  Evidence: Every recorded execution failed and the estimated daily rate is zero.
-  Queries: 3.
-  Assumption: No replacement query is added.
-  Uncertainty: These executions are already estimated at zero scan cost, so disabling
-  them does not reduce the estimated bill. The failure is an operational issue. Do not
-  delete the destination tables.
-    sq_5013 $0.0000 / day (daily marts.app_version_adoption)
-    sq_5014 $0.0000 / day (daily marts.partner_postback_recon)
-    sq_5015 $0.0000 / day (daily marts.session_quality_v1)
-
-6. Schedule stops that do not change SQL
-The amounts below are the scenario totals already calculated. They are not a combined
-  saving.
-  stop-no-recorded-consumer: $39.41 / day (measured)
-  stop-zero-scan-failures: $0.00 / day (measured)
-
-7. Changes that need a business or SQL decision
-The amounts below are the scenario totals already calculated. They are not a combined
-  saving.
-  one-run-per-observed-day: $1038.75 / day (assumed)
-  stop-repeated-sql-sq_1016-sq_5010: $16.22 / day (assumed)
-  stop-repeated-sql-sq_1012-sq_5007: $5.63 / day (assumed)
-  stop-repeated-sql-sq_1017-sq_5009: $2.63 / day (assumed)
-  stop-competing-writer-reports.revenue_daily: $1.77 / day (assumed)
-  stop-repeated-sql-sq_0105-sq_0114: $1.77 / day (assumed)
-  stop-repeated-sql-sq_0411-sq_0412-sq_0413: $1.50 / day (assumed)
-  stop-repeated-sql-sq_5016-sq_5017: $1.19 / day (assumed)
-
-8. Audit findings by observed daily cost
-The amount is the observed daily rate of the queries the finding names. It is not the
-  saving from the audit recommendation unless a scenario above stops those queries and
-  prices that stop.
-  OP-PARTITION-FILTER P3 needs_verification $1406.1499 / day configs: sq_0101, sq_0105,
-  sq_0107, sq_0108, sq_0109, sq_0110, sq_0114, sq_0301, sq_0401, sq_0402, sq_0403,
-  sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1006, sq_1007, sq_1008, sq_1009,
-  sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016, sq_1017, sq_1018,
-  sq_1019, sq_1020, sq_1021, sq_1022, sq_1024, sq_1025, sq_1026, sq_1027, sq_3001,
-  sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008, sq_3009, sq_3010,
-  sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3018, sq_3019,
-  sq_3020, sq_3021, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027, sq_3030, sq_4001,
-  sq_4002, sq_4003, sq_4004, sq_4005, sq_4006, sq_4007, sq_4008, sq_4009, sq_4010,
-  sq_4011, sq_4012, sq_4013, sq_4014, sq_4015, sq_4016, sq_4017, sq_4018, sq_4022,
-  sq_4023, sq_4024, sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012,
-  sq_5013, sq_5014, sq_5015, sq_5016, sq_5017, sq_5018, sq_5019. Missing daily rate:
-  sq_5019.
-    Partition predicates are missing or not bound to each partitioned source
-  OP-RESOURCES-EXCEEDED P2 confirmed $1150.9061 / day configs: sq_0105, sq_0109,
-  sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008, sq_3009,
-  sq_3010, sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3018,
-  sq_3020, sq_3021, sq_3022, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027, sq_3028,
-  sq_3029, sq_3030, sq_4001, sq_4003, sq_4004, sq_4005, sq_4006, sq_4009, sq_4010,
-  sq_4011, sq_4012, sq_4013, sq_4014, sq_4016, sq_4017, sq_4018, sq_4019, sq_4020,
-  sq_4021, sq_4022, sq_4023, sq_4024.
-    Run history records Resources exceeded failures
-  CR-SCHEMA-COUNT P2 indicated $1142.8246 / day configs: sq_0101, sq_0102, sq_0103,
-  sq_0104, sq_0105, sq_0108, sq_0109, sq_0113, sq_0114, sq_0201, sq_0202, sq_0301,
-  sq_0302, sq_0303, sq_0401, sq_0402, sq_0403, sq_0411, sq_0412, sq_0413, sq_0501,
-  sq_0502, sq_0503, sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1008, sq_1009,
-  sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016, sq_1017, sq_1018,
-  sq_1019, sq_1020, sq_1023, sq_1024, sq_1025, sq_1026, sq_1027, sq_1028, sq_3001,
-  sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3008, sq_3009, sq_3010, sq_3012,
-  sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3020, sq_3021, sq_3022, sq_3023,
-  sq_3025, sq_3027, sq_3028, sq_3029, sq_3030, sq_4002, sq_4003, sq_4004, sq_4005,
-  sq_4006, sq_4007, sq_4008, sq_4009, sq_4010, sq_4011, sq_4012, sq_4013, sq_4014,
-  sq_4015, sq_4016, sq_4018, sq_4019, sq_4020, sq_4021, sq_4022, sq_4023, sq_4024,
-  sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5012, sq_5013, sq_5014, sq_5015,
-  sq_5016, sq_5017, sq_5018, sq_5019. Missing daily rate: sq_5019.
-    Outermost SELECT lists do not match catalog column counts
-  MN-RETIRE-NO-RECORDED-CONSUMER P3 needs_verification $39.4143 / day configs: sq_5007,
-  sq_5008, sq_5009, sq_5010, sq_5011, sq_5012.
-    Enabled queries have no consumer in the supplied graph or usage extract
-  MN-REPEATED-SQL-sq_1016-sq_5010 P3 confirmed $32.3638 / day configs: sq_1016, sq_5010.
-    Scheduled queries share the same SQL text
-  CR-UNPARSEABLE-SQL P1 confirmed $18.9274 / day configs: sq_0107, sq_0110, sq_3024,
-  sq_5011.
-    sqlglot cannot parse 4 scheduled queries
-  MN-REPEATED-SQL-sq_1012-sq_5007 P3 confirmed $11.3058 / day configs: sq_1012, sq_5007.
-    Scheduled queries share the same SQL text
-  CR-ROW-NUMBER-NO-ORDER P2 confirmed $6.8854 / day configs: sq_0102, sq_3027.
-    ROW_NUMBER has no ORDER BY
-  MN-REPEATED-SQL-sq_1017-sq_5009 P3 confirmed $5.2744 / day configs: sq_1017, sq_5009.
-    Scheduled queries share the same SQL text
-  OP-CYCLE-sq_0301-sq_0302-sq_0303 P2 confirmed $4.7915 / day configs: sq_0301, sq_0302,
-  sq_0303.
-    Scheduled queries form a dependency cycle
-  CR-SHORT-LOOKBACK-sq_1001 P2 indicated $3.5099 / day configs: sq_1001, sq_5002.
-    sq_1001 truncates reports.funnel_daily_core on a shorter outer date bound than a reader filters
-  MN-REPEATED-SQL-sq_0105-sq_0114 P3 confirmed $3.4362 / day configs: sq_0105, sq_0114.
-    Scheduled queries share the same SQL text
-  CR-COLUMN-WRITER-CONFLICT P2 needs_verification $3.2717 / day configs: sq_0104,
-  sq_0105, sq_0106, sq_5001.
-    Scheduled writers of one table do not project the same columns a reader uses
-  OP-SCHEDULE-OVERLAP-sq_0101-sq_0104 P1 confirmed $3.1106 / day configs: sq_0101,
-  sq_0104.
-    Matched executions overlap: sq_0101 ends after sq_0104 starts
-  OP-DUPLICATE-WRITER-sq_0104-sq_0105 P1 confirmed $2.9757 / day configs: sq_0104,
-  sq_0105.
-    reports.revenue_daily has more than one scheduled writer
-  MN-REPEATED-SQL-sq_5016-sq_5017 P3 confirmed $2.3811 / day configs: sq_5016, sq_5017.
-    Scheduled queries share the same SQL text
-  MN-REPEATED-SQL-sq_0411-sq_0412-sq_0413 P3 confirmed $2.2538 / day configs: sq_0411,
-  sq_0412, sq_0413.
-    Scheduled queries share the same SQL text
-  OP-SCHEDULE-OVERLAP-sq_0105-sq_5001 P2 confirmed $1.9317 / day configs: sq_0105,
-  sq_5001.
-    Matched executions overlap: sq_0105 ends after sq_5001 starts
-  OP-SCHEDULE-OVERLAP-sq_0105-sq_0106 P2 confirmed $1.9138 / day configs: sq_0105,
-  sq_0106.
-    Matched executions overlap: sq_0105 ends after sq_0106 starts
-  OP-SCHEDULE-OVERLAP-sq_0102-sq_0104 P2 confirmed $1.4996 / day configs: sq_0102,
-  sq_0104.
-    Matched executions overlap: sq_0102 ends after sq_0104 starts
-  CR-SHORT-LOOKBACK-sq_0104 P2 indicated $1.4969 / day configs: sq_0104, sq_0106,
-  sq_5001.
-    sq_0104 truncates reports.revenue_daily on a shorter outer date bound than a reader filters
-  OP-CYCLE-sq_0201-sq_0202 P2 confirmed $0.4738 / day configs: sq_0201, sq_0202.
-    Scheduled queries form a dependency cycle
-  CR-COLUMN-NOT-PROJECTED P1 needs_verification $0.4380 / day configs: sq_0106, sq_0111,
-  sq_0112, sq_5005.
-    Downstream SQL names a column the upstream scheduled SQL does not project
-  OP-SELF-READ-sq_0112 P2 confirmed $0.1855 / day configs: sq_0112.
-    sq_0112 reads its own destination
-  OP-ALREADY-DISABLED P4 confirmed $0.0000 / day configs: sq_5019. Missing daily rate:
-  sq_5019.
-    A scheduled query is already disabled and has no recorded consumer
-  OP-CATALOG-GAP-raw-app_versions P2 needs_verification $0.0000 / day configs: sq_5013.
-    raw.app_versions is read by scheduled SQL and is absent from the supplied catalog
-  OP-CATALOG-GAP-raw-partner_postbacks P2 needs_verification $0.0000 / day configs:
-  sq_5014.
-    raw.partner_postbacks is read by scheduled SQL and is absent from the supplied catalog
-  OP-CATALOG-GAP-staging-stg_sessions_v1 P2 needs_verification $0.0000 / day configs:
-  sq_5015.
-    staging.stg_sessions_v1 is read by scheduled SQL and is absent from the supplied catalog
-  OP-NOT-FOUND-raw-app_versions P1 confirmed $0.0000 / day configs: sq_5013.
-    Run history records Not found while reading raw.app_versions
-  OP-NOT-FOUND-raw-partner_postbacks P1 confirmed $0.0000 / day configs: sq_5014.
-    Run history records Not found while reading raw.partner_postbacks
-  OP-NOT-FOUND-staging-stg_sessions_v1 P1 confirmed $0.0000 / day configs: sq_5015.
-    Run history records Not found while reading staging.stg_sessions_v1
-
-9. Limitations
-total_bytes_processed is the byte count stored in run history. It is not a BigQuery
-  billing export. Cached bytes, bytes written, and charges for a failed query are not in
-  the supplied files.
-Observed schedule dates that are not contiguous: 0 configurations. A daily rate uses the
-  count of observed dates, not the calendar span from the first date to the last.
-The hourly scenario and the writer and repeated-SQL scenarios state a replacement that
-  was not run. Their dollar figures stay assumptions. The no-consumer figure is the
-  observed rate only, and the usage extract can still have missed a reader.
-Disabling a schedule is not deleting a table. This report does not select queries for
-  deletion.

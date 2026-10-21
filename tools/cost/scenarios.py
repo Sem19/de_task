@@ -14,10 +14,12 @@ from audit.common import consumers, table_name as dataset_table
 from audit.models import AuditFinding
 from cost.calculate import CALCULATION_PRECISION, divide, sum_published
 from cost.models import ConfigCost, EstateCost
+from cost.drivers import prioritize, review_drivers, top_contributors
 from cost.report_models import (
     ChangeClass,
     CostAnalysis,
     FindingCost,
+    MoneyRole,
     PricedQuery,
     RouteCost,
     Scenario,
@@ -40,8 +42,9 @@ _SPACE = re.compile(r"\s+")
 
 _NO_CONSUMER_UNCERTAINTY = (
     "A usage extract can miss a reader. The amount is the observed daily rate "
-    "of the listed queries and assumes no replacement scan. Do not disable "
-    "them from this report alone, and do not delete the tables."
+    "of the listed queries and assumes no replacement scan. It is not a "
+    "guaranteed saving. Do not disable them from this report alone, and do "
+    "not delete the tables."
 )
 _WRITER_UNCERTAINTY = (
     "The retained query is the lowest observed daily rate. config_id breaks "
@@ -60,7 +63,8 @@ _HOURLY_UNCERTAINTY = (
     "Each omitted execution is assumed to scan the same bytes as the "
     "execution that would remain. A single daily run of an incremental query "
     "can scan more than one hourly run. That replacement scan was not "
-    "measured. This is not a forecast of savings from changing the schedule."
+    "measured. This is a hypothetical scenario, not a recommended action, "
+    "and it is not a forecast of savings."
 )
 
 
@@ -105,6 +109,7 @@ def build_cost_analysis(
     scenarios.extend(_writer_scenarios(graph, by_config, queries))
     scenarios.extend(_repeated_scenarios(queries, by_config, inventory, readers))
     ordered = tuple(sorted(scenarios, key=_scenario_key))
+    reviews = review_drivers(inventory, graph, findings, estate.configs)
     return CostAnalysis(
         source_name=source_name,
         estate=estate,
@@ -115,6 +120,9 @@ def build_cost_analysis(
         frequency=estate.by_frequency,
         enabled=estate.by_enabled,
         ranked_configs=estate.configs,
+        top_configs=top_contributors(estate.configs),
+        driver_reviews=reviews,
+        recommendations=prioritize(reviews, ordered),
         route=_route_cost(graph, by_config, table_name),
         scenarios=ordered,
         finding_costs=_finding_costs(findings, by_config),
@@ -155,6 +163,7 @@ def _no_consumer_scenario(
             "replacement query is added."
         ),
         uncertainty=_NO_CONSUMER_UNCERTAINTY,
+        money_role="conditional_avoidable",
     )
 
 
@@ -187,6 +196,7 @@ def _zero_scan_scenario(by_config: dict[str, ConfigCost]) -> Scenario | None:
             "disabling them does not reduce the estimated bill. The failure "
             "is an operational issue. Do not delete the destination tables."
         ),
+        money_role="operational_cleanup",
     )
 
 
@@ -231,6 +241,7 @@ def _writer_scenarios(
                     "writer alone."
                 ),
                 uncertainty=_WRITER_UNCERTAINTY,
+                money_role="assumed_replacement",
             )
         )
     return scenarios
@@ -291,6 +302,7 @@ def _repeated_scenarios(
                     "destinations."
                 ),
                 uncertainty=_REPEATED_UNCERTAINTY,
+                money_role="assumed_replacement",
             )
         )
     return scenarios
@@ -333,7 +345,7 @@ def _hourly_scenario(by_config: dict[str, ConfigCost]) -> Scenario | None:
     )
     return Scenario(
         scenario_id="one-run-per-observed-day",
-        title="Run each hourly query once per observed day",
+        title="Hypothetical: one execution per observed day for each hourly query",
         kind="assumed",
         change_class="business_logic",
         stops=tuple(member.config_id for member in ordered),
@@ -341,7 +353,7 @@ def _hourly_scenario(by_config: dict[str, ConfigCost]) -> Scenario | None:
         daily_savings_usd=sum_published(member.daily_savings_usd for member in ordered),
         members=ordered,
         evidence=(
-            "The saving for a query is its observed daily rate minus the "
+            "The difference for a query is its observed daily rate minus the "
             "average cost of one recorded execution. The estate figure is "
             f"the sum across {len(ordered)} hourly queries that ran more "
             "than once on an observed date."
@@ -351,6 +363,7 @@ def _hourly_scenario(by_config: dict[str, ConfigCost]) -> Scenario | None:
             "average recorded execution, not a full extra day of increments."
         ),
         uncertainty=_HOURLY_UNCERTAINTY,
+        money_role="hypothetical",
     )
 
 
@@ -428,6 +441,7 @@ def _stop_scenario(
     evidence: str,
     assumption: str,
     uncertainty: str,
+    money_role: MoneyRole,
 ) -> Scenario:
     known = [
         config for config in stopped if config.normalized_daily_run_rate_usd is not None
@@ -476,6 +490,7 @@ def _stop_scenario(
         evidence=evidence,
         assumption=assumption,
         uncertainty=uncertainty,
+        money_role=money_role,
     )
 
 

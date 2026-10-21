@@ -13,6 +13,12 @@ from cost.models import ConfigCost, EstateCost, SliceCost
 
 ChangeClass = Literal["owner_confirmation", "business_logic"]
 ScenarioKind = Literal["measured", "assumed"]
+MoneyRole = Literal[
+    "conditional_avoidable",
+    "hypothetical",
+    "assumed_replacement",
+    "operational_cleanup",
+]
 
 
 class ScenarioMember(NamedTuple):
@@ -42,6 +48,7 @@ class Scenario(NamedTuple):
     evidence: str
     assumption: str
     uncertainty: str
+    money_role: MoneyRole
 
 
 class PricedQuery(NamedTuple):
@@ -82,6 +89,44 @@ class FindingCost(NamedTuple):
     missing_rate_config_ids: tuple[str, ...]
 
 
+class DriverReview(NamedTuple):
+    """Evidence from SQL, the catalog, the schedule, and recorded executions.
+
+    The text does not estimate a byte reduction.
+    """
+
+    config_id: str
+    destination: str | None
+    sql_path: str | None
+    frequency: str
+    schedule: str | None
+    write_disposition: str | None
+    daily_cost_usd: Decimal | None
+    daily_tib: Decimal | None
+    finding_ids: tuple[str, ...]
+    processing_pattern: str
+    scan_volume: str
+    investigation: str
+    risks: str
+    verification: str
+
+
+class Recommendation(NamedTuple):
+    """One engineering next step. Dollar fields are observed or conditional.
+
+    ``conditionally_avoidable_usd`` is set only when stopping the queries
+    would remove their observed scan cost and no replacement scan is assumed.
+    It is still conditional on an owner check. It is not a guaranteed saving.
+    """
+
+    rank: int
+    heading: str
+    config_ids: tuple[str, ...]
+    observed_daily_cost_usd: Decimal | None
+    conditionally_avoidable_usd: Decimal | None
+    body: str
+
+
 class CostAnalysis(NamedTuple):
     """Everything ``render_cost`` needs. Figures are already calculated."""
 
@@ -91,6 +136,9 @@ class CostAnalysis(NamedTuple):
     frequency: tuple[SliceCost, ...]
     enabled: tuple[SliceCost, ...]
     ranked_configs: tuple[ConfigCost, ...]
+    top_configs: tuple[ConfigCost, ...]
+    driver_reviews: tuple[DriverReview, ...]
+    recommendations: tuple[Recommendation, ...]
     route: RouteCost
     scenarios: tuple[Scenario, ...]
     finding_costs: tuple[FindingCost, ...]
