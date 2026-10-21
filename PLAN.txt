@@ -2,9 +2,10 @@ PLAN
 Dataform migration for the reports.revenue_daily route
 Project: task2_estate/dataform
 
-This is the migration design. No SQLX has been added, no scheduled query has
-been disabled, and no production table has been rebuilt. AUDIT.txt, COST.txt,
-and the task2_estate source files are unchanged.
+task2_estate/dataform is the implementation of this design. It compiles
+to 13 targets: 3 declarations, 6 tables, and 4 assertions. No scheduled
+query has been disabled, and no production table has been rebuilt.
+AUDIT.txt, COST.txt, and the task2_estate source files are unchanged.
 
 1. What this migration covers
 The route is migration_scope for the table name revenue_daily: ancestors of
@@ -47,15 +48,26 @@ Blocked until the column contract is resolved:
   reports.kpi_snapshot     sq_0112
   marts.exec_kpi_v2        sq_5005
 
-sq_0111 reads payment_date from reports.revenue_by_region. sq_0106 renames
-that column to report_date and does not project payment_date. sq_5005 reads
-payment_date from reports.exec_kpi_daily, which sq_0111 also renames to
-report_date. sq_0112 reads metric_name and metric_value from
-reports.exec_kpi_daily, and sq_0111 does not project either name (AUDIT
-CR-COLUMN-NOT-PROJECTED, needs_verification). The live tables were not
-queried. Copying these files into Dataform would fail compilation against
-the upstream files. Renaming the columns in the readers would change the
-checked-in SQL, so that rename is not part of this design.
+sq_0111 reads payment_date from reports.revenue_by_region. The Dataform
+revenue_by_region action is sq_0106, which renames payment_date to
+report_date and drops it with EXCEPT. sq_5005 reads payment_date from
+reports.exec_kpi_daily. sq_0111's own SELECT would rename that column to
+report_date, so the name sq_5005 filters is not on that projection.
+sq_0112 reads metric_name and metric_value from reports.exec_kpi_daily.
+Neither name appears in sq_0111. It also reads snapshot_date from its own
+destination (OP-SELF-READ-sq_0112).
+
+schemas.json does not describe these four tables. table_catalog.csv has
+counts only: revenue_by_region 17, exec_kpi_daily 8, kpi_snapshot 12,
+exec_kpi_v2 13. Those counts do not match the SELECT lists in the files.
+run_history.csv records SUCCEEDED for sq_0111, sq_0112, and sq_5005 on
+all 90 daily rows, and the error_message column is empty. A succeeded
+row does not name the columns the job read. Replacing payment_date with
+report_date, or deriving metric_name and metric_value from the revenue
+columns, would publish a contract the files do not contain. The three
+queries stay on their scheduled configs. sq_0105 is also not a Dataform
+action: it is the second writer of reports.revenue_daily, and section 4
+keeps sq_0104 as the only Dataform writer.
 
 3. Action inventory
 One Dataform writer of reports.revenue_daily: revenue_daily, from sq_0104.
@@ -366,15 +378,16 @@ and it is not a cost. The three KPI tables stay on their current scheduled
 writers until the blocked actions are actually implemented.
 
 11. Cutover and rollback
-None of this has been done. This lab has no warehouse, so dataform run
-cannot be compared with production here. make compile is the check once
-the 13 ready actions exist as files.
+None of the production switch below has been done. This lab has no
+warehouse, so dataform run cannot be compared with production here.
+make compile is the check on the 13 files that exist. It does not prove
+row-level equivalence.
 
 Validation happens in an isolated dataset or project, while the production
 Scheduled Queries keep writing the production table names.
 
-  1. Implement the 13 ready actions. Point the isolated run at a dataset
-     or project that production consumers do not read.
+  1. The 13 actions are already in task2_estate/dataform. Point an isolated
+     run at a dataset or project that production consumers do not read.
   2. Compile the project (make compile). Fix compile errors before any
      write to production names.
   3. Where warehouse access exists, run the isolated workflow and compare
@@ -424,15 +437,18 @@ sq_0111, sq_0112, and sq_5005 are outside this switch. Their rollback is
 "they were never moved."
 
 12. Equivalence
-With no warehouse, equivalence for the ready actions is file equivalence.
-The SELECT lists, filters, joins, CASE, and window frames of sq_0101,
-sq_0102, sq_0103, sq_0104, sq_0106, and sq_5001 are copied. Only the table
-references change, to Dataform refs. Dataset and table names stay. The
-3, 7, 400, and 730 day intervals stay. Empty partitioning_field stays empty.
+With no warehouse, equivalence for the 13 implemented actions is file
+equivalence plus compilation. The SELECT lists, filters, joins, CASE, and
+window frames of sq_0101, sq_0102, sq_0103, sq_0104, sq_0106, and sq_5001
+are copied. Only the table references change, to Dataform refs. Dataset
+and table names stay. The 3, 7, 400, and 730 day intervals stay. Empty
+partitioning_field stays empty. sqlglot comparison of the compiled SQL
+with those six files is a text check. It is not a comparison of rows,
+revenue_usd, or assertion results. No BigQuery job was run.
 
 sq_0105 has no Dataform equivalent. The hourly attempt grain continues as
-sq_0114. The three blocked actions have no equivalence claim until the
-column names are decided.
+sq_0114. sq_0111, sq_0112, and sq_5005 have no SQLX and no equivalence
+claim. Their column contracts are still the open questions in section 14.
 
 13. Cost
 COST.txt prices the 10-query graph route at 0.9256 TiB/day and $5.79/day,

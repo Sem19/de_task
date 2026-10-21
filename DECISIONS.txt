@@ -83,17 +83,31 @@ same pattern and was not migrated.
 6. KPI models not built
 Decision. No SQLX for sq_0111 (reports.exec_kpi_daily), sq_0112
 (reports.kpi_snapshot), or sq_5005 (marts.exec_kpi_v2). Their scheduled
-configs stay enabled.
+configs stay ENABLED. No column was renamed to force a compile.
 
-Reason. sq_0106 renames payment_date to report_date. sq_0111 still selects
-and filters payment_date, using CURRENT_DATE("Europe/Kyiv") and a 120-day
-window. sq_5005 reads payment_date from exec_kpi_daily, which sq_0111 also
-renames to report_date. sq_0112 reads metric_name and metric_value from
-exec_kpi_daily; sq_0111 does not project them (CR-COLUMN-NOT-PROJECTED).
-sq_0112 also reads reports.kpi_snapshot for snapshot_date < CURRENT_DATE()
-and unions today (OP-SELF-READ-sq_0112). Copying that into a table that
-only reads upstream would drop the history. Renaming columns so the files
-compile would change the checked-in SQL. The live tables were not queried.
+Reason. The Dataform revenue_by_region action is the sq_0106 statement.
+It projects report_date and removes payment_date with EXCEPT. sq_0111
+selects and filters payment_date, with CURRENT_DATE("Europe/Kyiv") and a
+120-day window. sq_0111 would then publish report_date, not payment_date,
+and sq_5005 filters payment_date on that table. sq_0112 selects
+metric_name and metric_value from exec_kpi_daily. Those names are not in
+the sq_0111 file, and no other file on this route defines them
+(CR-COLUMN-NOT-PROJECTED, needs_verification).
+
+sq_0112 also reads reports.kpi_snapshot where snapshot_date < CURRENT_DATE()
+and unions the today branch (OP-SELF-READ-sq_0112, confirmed). The Dataform
+shape for that pattern, once the columns exist, is incremental with
+${self()}. A table that only reads exec_kpi_daily would drop the history.
+The today branch names three columns. The catalog count for kpi_snapshot
+is 12. There is no snapshot export in this repo.
+
+schemas.json stops at raw tables and ml.legacy_user_map. table_catalog.csv
+has counts, not names: revenue_by_region 17, exec_kpi_daily 8,
+kpi_snapshot 12, exec_kpi_v2 13. run_history.csv has 90 SUCCEEDED rows and
+no error text for each of sq_0111, sq_0112, and sq_5005. That shows the
+jobs were recorded as successful. It does not list the columns they read,
+so it does not justify treating report_date as payment_date or inventing
+metric_name and metric_value from payments, payers, or revenue_usd.
 
 7. Uniqueness assertions
 Decision. Four assertion actions, each GROUP BY the grain the SQL already
