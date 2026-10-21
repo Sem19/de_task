@@ -51,16 +51,18 @@ def _snapshot(
     data_version: int = 42,
     currency: str = "EUR",
     timezone_name: str = MOCK_ACCOUNT_TIMEZONE,
+    restated_through: date = date(2026, 10, 19),
+    report_id: str = "rep_1",
 ) -> ValidatedReport:
     return ValidatedReport(
-        report_id="rep_1",
+        report_id=report_id,
         account_id="acct_5512",
         date_from=date_from,
         date_to=date_to,
         currency=currency,
         timezone=timezone_name,
         data_version=data_version,
-        restated_through=date(2026, 10, 19),
+        restated_through=restated_through,
         attribution_window_days=3,
         rows=rows,
     )

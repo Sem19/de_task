@@ -50,6 +50,10 @@ POSTGRES_BIGINT_MIN = -9223372036854775808
 POSTGRES_BIGINT_MAX = 9223372036854775807
 
 WAREHOUSE_SCHEMA = "public"
+EXTRACT_STATE_KEY = "partner_report"
+# Session advisory lock (two-int form). Held on a dedicated connection.
+EXTRACT_LOCK_CLASS = 7421
+EXTRACT_LOCK_ID = 1
 # Mock account timezone. Used only to backfill legacy rows that predate
 # ``reporting_timezone``. New inserts must supply the account timezone.
 MOCK_ACCOUNT_TIMEZONE = "America/Los_Angeles"
