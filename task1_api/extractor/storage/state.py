@@ -201,9 +201,7 @@ def _next_loaded_through(
     return max(previous, snapshot.date_to)
 
 
-def _next_loaded_from(
-    current: ExtractState | None, snapshot: ValidatedReport
-) -> date:
+def _next_loaded_from(current: ExtractState | None, snapshot: ValidatedReport) -> date:
     """Return the start of contiguous loaded coverage.
 
     The first window is the baseline. A later adjoining chunk keeps the

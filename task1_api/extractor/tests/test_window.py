@@ -329,10 +329,13 @@ class PlanExtractWindowsTest(unittest.TestCase):
             while cursor <= window.date_to:
                 dates.append(cursor)
                 cursor += timedelta(days=1)
-        self.assertEqual(dates, [
-            date(2026, 10, 8) + timedelta(days=offset)
-            for offset in range((TODAY - date(2026, 10, 8)).days + 1)
-        ])
+        self.assertEqual(
+            dates,
+            [
+                date(2026, 10, 8) + timedelta(days=offset)
+                for offset in range((TODAY - date(2026, 10, 8)).days + 1)
+            ],
+        )
 
     def test_never_settled_historical_backfill_is_gap_free(self) -> None:
         windows = plan_extract_windows(

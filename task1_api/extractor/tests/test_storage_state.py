@@ -267,7 +267,9 @@ class ExtractStateTest(unittest.TestCase):
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 14)), 1)
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 7)), 1)
 
-    def test_never_settled_multi_chunk_does_not_skip_earlier_mutable_dates(self) -> None:
+    def test_never_settled_multi_chunk_does_not_skip_earlier_mutable_dates(
+        self,
+    ) -> None:
         """A 14-day mutable window spans two 7-day reports; none settle.
 
         After the second chunk commits, the next plan must still start at
