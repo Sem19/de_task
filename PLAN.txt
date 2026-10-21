@@ -39,12 +39,8 @@ The design contains 16 Dataform actions:
   3 downstream transformations blocked on column contracts
   4 uniqueness assertions
 
-13 of the 16 can be implemented and compiled now: the 3 declarations, the 6
-transformations, and the 4 assertions. The other 3 cannot. Nothing in this
-list has been migrated. The starter file declaration.js already declares
-raw.payments and raw.subscriptions. raw.fx_rates, the six table files, and
-the four assertion files are still to be written. No placeholder SQLX is
-created for the blocked actions.
+13 of the 16 are implemented under task2_estate/dataform and compile.
+The other 3 are not built. No placeholder SQLX was added for them.
 
 Blocked until the column contract is resolved:
   reports.exec_kpi_daily   sq_0111
@@ -62,29 +58,31 @@ the upstream files. Renaming the columns in the readers would change the
 checked-in SQL, so that rename is not part of this design.
 
 3. Action inventory
-One proposed Dataform writer of reports.revenue_daily: revenue_daily, from
-sq_0104. Status "ready" means the current files are enough to implement and
-compile the action. It does not mean the action exists yet.
+One Dataform writer of reports.revenue_daily: revenue_daily, from sq_0104.
+Status "implemented" means the SQLX or declaration is in the project.
+"blocked" means there is no file for that action.
 
   Action                                    Type          Config    Depends on                         Status
-  raw.payments                              declaration   —         —                                  ready, already declared
-  raw.subscriptions                         declaration   —         —                                  ready, already declared
-  raw.fx_rates                              declaration   —         —                                  ready, declaration not written
-  stg_payments                              table         sq_0101   raw.payments                       ready
-  stg_subscriptions                         table         sq_0102   raw.subscriptions                  ready
-  stg_fx_daily                              table         sq_0103   raw.fx_rates                       ready
-  revenue_daily                             table         sq_0104   stg_payments, stg_subscriptions, stg_fx_daily   ready
-  revenue_by_region                         table         sq_0106   revenue_daily                      ready
-  revenue_unified                           table         sq_5001   revenue_daily                      ready
+  raw.payments                              declaration   —         —                                  implemented
+  raw.subscriptions                         declaration   —         —                                  implemented
+  raw.fx_rates                              declaration   —         —                                  implemented
+  stg_payments                              table         sq_0101   raw.payments                       implemented
+  stg_subscriptions                         table         sq_0102   raw.subscriptions                  implemented
+  stg_fx_daily                              table         sq_0103   raw.fx_rates                       implemented
+  revenue_daily                             table         sq_0104   stg_payments, stg_subscriptions, stg_fx_daily   implemented
+  revenue_by_region                         table         sq_0106   revenue_daily                      implemented
+  revenue_unified                           table         sq_5001   revenue_daily                      implemented
   exec_kpi_daily                            table         sq_0111   revenue_by_region                  blocked
   kpi_snapshot                              incremental   sq_0112   exec_kpi_daily, previous snapshot  blocked
   exec_kpi_v2                               table         sq_5005   exec_kpi_daily                     blocked
-  assert_stg_payments_payment_id            assertion     sq_0101   stg_payments                       ready
-  assert_stg_subscriptions_subscription_id  assertion     sq_0102   stg_subscriptions                  ready
-  assert_stg_fx_daily_rate_date_currency    assertion     sq_0103   stg_fx_daily                       ready
-  assert_revenue_daily_grain                assertion     sq_0104   revenue_daily                      ready
+  assert_stg_payments_payment_id            assertion     sq_0101   stg_payments                       implemented
+  assert_stg_subscriptions_subscription_id  assertion     sq_0102   stg_subscriptions                  implemented
+  assert_stg_fx_daily_rate_date_currency    assertion     sq_0103   stg_fx_daily                       implemented
+  assert_revenue_daily_grain                assertion     sq_0104   revenue_daily                      implemented
 
-Every action is tagged revenue_daily. In production that tag is the slice
+Tables and assertions are tagged revenue_daily. Declarations are not:
+dataform core 3.0.0 accepts tags on declare() and drops them from the
+compiled declaration. In production the tag is the slice
 to invoke. Schemas are raw, staging, reports, and marts. Assertions use
 dataform_assertions, which workflow_settings.yaml already sets as
 defaultAssertionDataset. defaultDataset in that file is dataform; these
@@ -460,11 +458,34 @@ total or with the hypothetical hourly-collapse scenario.
   Reshaping any SELECT to the catalog column count. Out of this migration.
   The time of day for the Dataform invocation.
 
-15. Implementation, when it starts
-Add the raw.fx_rates declaration. Add six table SQLX files and four
-assertion SQLX files under task2_estate/dataform, schema set, tag
-revenue_daily. Copy the scheduled SELECT bodies and replace table
-references with refs. Leave sq_0105, sq_0111, sq_0112, and sq_5005
-without SQLX until the decisions in section 14 name a column contract.
-make compile must exit 0. dataform run is not expected to succeed in
-this lab.
+15. Migration order
+The order followed is the dependency order, and each step compiles on
+its own:
+
+  1. Declare raw.payments, raw.subscriptions, and raw.fx_rates. Dataform
+     does not build these tables.
+  2. staging.stg_payments, staging.stg_subscriptions, staging.stg_fx_daily
+     from sq_0101, sq_0102, and sq_0103.
+  3. reports.revenue_daily from sq_0104, then reports.revenue_by_region
+     (sq_0106) and marts.revenue_unified (sq_5001). Both readers depend
+     on revenue_daily, not on each other.
+  4. The four uniqueness assertions, after the tables they check.
+
+sq_0105, sq_0111, sq_0112, and sq_5005 have no SQLX. make compile exits
+0. dataform run is not expected to succeed in this lab.
+
+No shared macro was added under includes/. The region CASE is only in
+sq_0104, so it stays in that statement. Repeated SQL outside this route
+was left on the scheduled queries instead of being folded into a helper.
+
+16. How this was done
+tools/ loads the estate, parses SQL with sqlglot, builds the dependency
+graph, writes AUDIT.txt, and writes COST.txt from run_history.csv.
+Those files are regenerated by the commands in README.txt. The numbers
+are the tool output.
+
+Choosing the revenue_daily route, keeping sq_0104 as the only Dataform
+writer, leaving the 3-day window and the unordered ROW_NUMBER in place,
+and not renaming columns on the KPI queries was judgment. An AI coding
+assistant was used to implement and review the tools and the Dataform
+files. It did not supply the cost or audit figures.
