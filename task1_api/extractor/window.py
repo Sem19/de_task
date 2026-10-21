@@ -63,7 +63,11 @@ class ReportWindow:
 
     @property
     def inclusive_days(self) -> int:
-        """Return the number of calendar dates in the window."""
+        """Return how many calendar dates the inclusive window covers.
+
+        Returns:
+            ``date_to - date_from + 1``. A single day is ``1``.
+        """
         return (self.date_to - self.date_from).days + 1
 
 
@@ -77,6 +81,9 @@ def account_today(now_utc: datetime) -> date:
     Args:
         now_utc: Timezone-aware clock instant. Converted to UTC first.
 
+    Returns:
+        The calendar date in the mock's fixed UTC−7 offset.
+
     Raises:
         WindowError: If ``now_utc`` is naive.
     """
@@ -89,6 +96,9 @@ def parse_extract_start_date(value: str | None) -> date | None:
 
     Args:
         value: Raw env value. Blank is treated as unset.
+
+    Returns:
+        The calendar date, or ``None`` when ``value`` is ``None`` or blank.
 
     Raises:
         WindowError: If the value is not a calendar ``YYYY-MM-DD``.
@@ -105,7 +115,17 @@ def parse_extract_start_date(value: str | None) -> date | None:
 
 
 def load_extract_start_date(env: Mapping[str, str]) -> date | None:
-    """Read ``EXTRACT_START_DATE`` from an environment mapping."""
+    """Read ``EXTRACT_START_DATE`` from an environment mapping.
+
+    Args:
+        env: Environment mapping. A missing key is treated as unset.
+
+    Returns:
+        The calendar date, or ``None`` when the variable is missing or blank.
+
+    Raises:
+        WindowError: If the value is not a calendar ``YYYY-MM-DD``.
+    """
     return parse_extract_start_date(env.get(EXTRACT_START_DATE_ENV))
 
 
@@ -149,6 +169,21 @@ def _incremental_start(
     extract_start_date: date | None,
     today: date,
 ) -> date:
+    """Return the first date that incremental coverage must include.
+
+    With no checkpoint, that is ``extract_start_date`` or the default
+    lookback ending on ``today``. With a checkpoint, it is
+    ``next_incremental_start`` when anything has settled, otherwise
+    ``loaded_from``.
+
+    Args:
+        state: Last committed checkpoint, or ``None`` on the first run.
+        extract_start_date: Optional configured baseline.
+        today: Mock reporting date for this run.
+
+    Returns:
+        Inclusive start of the incremental portion of the plan.
+    """
     if state is None:
         if extract_start_date is not None:
             return extract_start_date
@@ -159,6 +194,20 @@ def _incremental_start(
 
 
 def _coverage_start(incremental_start: date, extract_start_date: date | None) -> date:
+    """Return the oldest date this run should request.
+
+    An ``extract_start_date`` earlier than ``incremental_start`` pulls the
+    plan backward for a backfill. A later or missing value leaves the
+    incremental cursor in charge.
+
+    Args:
+        incremental_start: First date the watermark still needs.
+        extract_start_date: Optional backfill floor.
+
+    Returns:
+        The earlier of the two dates, or ``incremental_start`` when the
+        override is absent or not earlier.
+    """
     if extract_start_date is None or extract_start_date >= incremental_start:
         return incremental_start
     return extract_start_date
@@ -169,6 +218,19 @@ def _windows_for_range(
     today: date,
     incremental_start: date,
 ) -> list[ReportWindow]:
+    """Split ``start`` through ``today`` into backfill and incremental chunks.
+
+    Dates before ``incremental_start`` are ``backfill``. The rest, through
+    ``today``, are ``incremental``.
+
+    Args:
+        start: Oldest date to request.
+        today: Inclusive end of the plan.
+        incremental_start: First date classified as incremental.
+
+    Returns:
+        Oldest-first windows.
+    """
     if start < incremental_start:
         backfill_end = incremental_start - _ONE_DAY
         return _inclusive_chunks(
@@ -178,6 +240,17 @@ def _windows_for_range(
 
 
 def _inclusive_chunks(start: date, end: date, kind: WindowKind) -> list[ReportWindow]:
+    """Split an inclusive range into chunks of at most seven days.
+
+    Args:
+        start: Inclusive first date.
+        end: Inclusive last date.
+        kind: Label applied to every chunk.
+
+    Returns:
+        Contiguous, non-overlapping windows. Empty when ``start`` is after
+        ``end``.
+    """
     if start > end:
         return []
     windows: list[ReportWindow] = []
@@ -190,6 +263,17 @@ def _inclusive_chunks(start: date, end: date, kind: WindowKind) -> list[ReportWi
 
 
 def _as_utc(now_utc: datetime) -> datetime:
+    """Convert an aware instant to UTC.
+
+    Args:
+        now_utc: Clock instant. Naive values are rejected.
+
+    Returns:
+        The same instant in UTC.
+
+    Raises:
+        WindowError: If ``now_utc`` has no ``tzinfo``.
+    """
     if now_utc.tzinfo is None:
         raise WindowError("now_utc must be timezone-aware")
     return now_utc.astimezone(timezone.utc)

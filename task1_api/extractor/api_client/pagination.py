@@ -109,6 +109,23 @@ def download_rows(client: PartnerAPIClient, report_id: str) -> ReportRows:
 
 
 def _fetch_page(client: PartnerAPIClient, report_id: str, offset: int) -> Page:
+    """Download one report page at ``offset``.
+
+    Requests ``REPORT_PAGE_LIMIT`` rows ordered by ``REPORT_ORDER_BY``.
+
+    Args:
+        client: Authenticated HTTP client.
+        report_id: Completed report id.
+        offset: Number of rows already collected.
+
+    Returns:
+        The parsed page.
+
+    Raises:
+        ReportNotFoundError: If the partner returns HTTP 404.
+        PartnerAPIError: If the request or payload is invalid.
+        ReportPaginationError: If the page exceeds the requested limit.
+    """
     path = report_rows_path(report_id)
     logger.debug(
         "GET %s offset=%s limit=%s order_by=%s",
@@ -137,6 +154,21 @@ def _parse_page(
     response: httpx.Response,
     path: str,
 ) -> Page:
+    """Validate one rows payload and return a :class:`Page`.
+
+    Args:
+        client: Client used to decode the JSON object.
+        response: Successful rows response.
+        path: Request path included in error messages.
+
+    Returns:
+        Rows plus completeness metadata from this page.
+
+    Raises:
+        PartnerAPIError: If rows, totals, or ``meta`` have the wrong type.
+        ReportPaginationError: If the page contains more than
+            ``REPORT_PAGE_LIMIT`` rows.
+    """
     body = client._json_object(response, path)
     rows_raw = body.get("rows")
     if not isinstance(rows_raw, list):
@@ -205,7 +237,20 @@ def _parse_page(
 
 
 def _merge_page(snapshot: Page | None, page: Page, report_id: str) -> Page:
-    """Keep the first page's metadata; reject later pages that disagree."""
+    """Keep the first page's metadata and reject later pages that disagree.
+
+    Args:
+        snapshot: Metadata from earlier pages, or ``None`` on the first page.
+        page: Page just fetched.
+        report_id: Job id included in error messages.
+
+    Returns:
+        ``page`` on the first call, otherwise ``snapshot``.
+
+    Raises:
+        ReportPaginationError: If ``total`` or meta fields change. Error
+            codes are ``inconsistent_total`` and ``inconsistent_meta``.
+    """
     if snapshot is None:
         return page
     if page.total != snapshot.total:

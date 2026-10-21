@@ -211,6 +211,18 @@ def reconcile(
 def _expected_values(
     row: NormalizedRow, snapshot: ValidatedReport
 ) -> tuple[Grain, dict[str, object]]:
+    """Return the grain and compared fields expected from one source row.
+
+    Args:
+        row: Normalized snapshot row.
+        snapshot: Source of currency, timezone, and ``data_version``.
+
+    Returns:
+        The reporting grain and the integer fields used in comparison.
+
+    Raises:
+        TypeError: If a compared metric is not an ``int``.
+    """
     values = {
         "impressions": _require_int(row.impressions, "impressions"),
         "clicks": _require_int(row.clicks, "clicks"),
@@ -227,6 +239,11 @@ def _expected_values(
 
 
 def _stored_values(row: StoredRow) -> dict[str, object]:
+    """Return the compared fields of one warehouse row.
+
+    Raises:
+        TypeError: If a compared metric is not an ``int``.
+    """
     return {
         "impressions": _require_int(row.impressions, "impressions"),
         "clicks": _require_int(row.clicks, "clicks"),
@@ -242,6 +259,17 @@ def _stored_values(row: StoredRow) -> dict[str, object]:
 
 
 def _stored_row(item: tuple[object, ...]) -> StoredRow:
+    """Build a :class:`StoredRow` from one ``partner_report`` tuple.
+
+    Args:
+        item: Selected columns in comparison order.
+
+    Returns:
+        A typed warehouse row.
+
+    Raises:
+        TypeError: If ``data_version`` is null or a metric is not an ``int``.
+    """
     (
         report_date,
         country,
@@ -277,6 +305,18 @@ def _stored_row(item: tuple[object, ...]) -> StoredRow:
 
 
 def _require_int(value: object, field: str) -> int:
+    """Return ``value`` when it is an ``int`` and not a ``bool``.
+
+    Args:
+        value: Candidate metric.
+        field: Name included in the error.
+
+    Returns:
+        The same integer.
+
+    Raises:
+        TypeError: If ``value`` is a boolean or any non-``int``.
+    """
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"{field} must be an int, got {type(value).__name__}")
     return value

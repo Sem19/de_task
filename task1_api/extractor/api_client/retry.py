@@ -18,15 +18,26 @@ _TOKEN_RETRY_ERRORS = frozenset({"token_expired", "invalid_token"})
 
 
 class SlidingWindowLimiter:
-    """Allow at most ``limit`` events per ``window_s`` seconds."""
+    """Allow at most ``limit`` events per rolling window.
+
+    Args:
+        limit: Maximum events inside ``window_s``. Zero or less disables
+            waiting.
+        window_s: Window length in seconds. Defaults to 60.
+    """
 
     def __init__(self, limit: int, window_s: float = 60.0) -> None:
+        """Store the limit and start with an empty event history."""
         self._limit = limit
         self._window_s = window_s
         self._times: list[float] = []
 
     def wait(self) -> None:
-        """Block until a slot is free, then record this event."""
+        """Block until a slot is free, then record this event.
+
+        A limit of zero or less returns immediately and records nothing.
+        The wait is based on ``time.monotonic`` and may call ``time.sleep``.
+        """
         if self._limit <= 0:
             return
         now = time.monotonic()
@@ -44,7 +55,17 @@ class SlidingWindowLimiter:
 
 
 def partner_error_code(response: httpx.Response) -> str | None:
-    """Read the partner error code from a flat or nested JSON body."""
+    """Read the partner error code from a flat or nested JSON body.
+
+    Accepts ``{"error": ...}``, FastAPI's ``{"detail": {"error": ...}}``,
+    and a string ``detail``. Non-JSON and non-object bodies have no code.
+
+    Args:
+        response: HTTP response whose body may contain an error code.
+
+    Returns:
+        The code as a string, or ``None`` when the body does not carry one.
+    """
     try:
         payload = response.json()
     except ValueError:
@@ -62,14 +83,33 @@ def partner_error_code(response: httpx.Response) -> str | None:
 
 
 def is_token_refresh_error(error: str | None) -> bool:
-    """Return True for 401 codes that justify one token refresh."""
+    """Return whether this 401 code should trigger one token refresh.
+
+    Args:
+        error: Partner error code, or ``None`` when the body had none.
+
+    Returns:
+        ``True`` for ``token_expired`` and ``invalid_token`` only.
+    """
     return error in _TOKEN_RETRY_ERRORS
 
 
 def retry_after_seconds(
     response: httpx.Response, default: float, buffer_s: float
 ) -> float:
-    """Parse ``Retry-After`` as seconds and add a small buffer."""
+    """Parse ``Retry-After`` as whole seconds and add ``buffer_s``.
+
+    An HTTP-date value, or any non-integer header, falls back to ``default``.
+    Negative waits and buffers are treated as zero before they are added.
+
+    Args:
+        response: Response that may include ``Retry-After``.
+        default: Seconds used when the header is missing or not an integer.
+        buffer_s: Extra seconds added for a rolling rate-limit window.
+
+    Returns:
+        Non-negative seconds to sleep.
+    """
     raw = response.headers.get("Retry-After")
     wait = default
     if raw is not None:
@@ -81,13 +121,35 @@ def retry_after_seconds(
 
 
 def backoff_seconds(attempt: int, settings: Settings) -> float:
-    """Exponential backoff for the attempt that just failed (1-based)."""
+    """Return exponential backoff for the attempt that just failed.
+
+    Delay is ``retry_backoff_s * 2 ** (attempt - 1)``, capped at
+    ``retry_backoff_cap_s``. Attempt numbers are 1-based.
+
+    Args:
+        attempt: The try that just failed. ``1`` uses the initial backoff.
+        settings: Backoff base and cap.
+
+    Returns:
+        Seconds to sleep before the next try.
+    """
     delay = settings.retry_backoff_s * (2 ** (attempt - 1))
     return min(delay, settings.retry_backoff_cap_s)
 
 
 def is_ambiguous_post(method: str, path: str) -> bool:
-    """True for POST /v2/reports, which must not be replayed blindly."""
+    """Return whether this call is ``POST /v2/reports``.
+
+    That request can create a job before the client sees a response, so a
+    transport or 5xx failure must not be replayed.
+
+    Args:
+        method: HTTP method. Compared case-insensitively.
+        path: Request path. One trailing slash is ignored.
+
+    Returns:
+        ``True`` only for ``POST`` to ``REPORTS_PATH``.
+    """
     return method.upper() == "POST" and path.rstrip("/") == REPORTS_PATH
 
 

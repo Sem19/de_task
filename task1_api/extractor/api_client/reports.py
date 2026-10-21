@@ -146,7 +146,19 @@ def poll_until_done(client: PartnerAPIClient, report_id: str) -> Report:
 
 
 def _validate_report_window(date_from: str, date_to: str) -> None:
-    """Reject windows the partner would refuse as ``range_too_wide`` or invalid."""
+    """Reject windows the partner would refuse before the request is sent.
+
+    The inclusive span may be at most ``REPORT_MAX_SPAN_DAYS + 1`` days.
+
+    Args:
+        date_from: Inclusive start, ``YYYY-MM-DD``.
+        date_to: Inclusive end, ``YYYY-MM-DD``.
+
+    Raises:
+        PartnerAPIError: ``bad_date`` when a value is not a calendar date,
+            ``bad_range`` when ``date_to`` is before ``date_from``, or
+            ``range_too_wide`` when the window exceeds seven inclusive days.
+    """
     try:
         start = date.fromisoformat(date_from)
         end = date.fromisoformat(date_to)
@@ -174,6 +186,19 @@ def _parse_report(
     response: httpx.Response,
     path: str,
 ) -> Report:
+    """Read ``report_id``, ``status``, and an optional ``row_count``.
+
+    Args:
+        client: Client used to decode the JSON object.
+        response: Successful submit or status response.
+        path: Request path included in error messages.
+
+    Returns:
+        The job. ``row_count`` is required when ``status`` is ``DONE``.
+
+    Raises:
+        PartnerAPIError: If the id, status, or a ``DONE`` row count is invalid.
+    """
     body = client._json_object(response, path)
     report_id = body.get("report_id")
     status = body.get("status")
@@ -201,6 +226,20 @@ def _parse_row_count(
     path: str,
     status_code: int,
 ) -> int | None:
+    """Return a non-negative row count, or ``None`` when the field is absent.
+
+    Args:
+        value: Raw ``row_count`` from the JSON body.
+        path: Request path included in the error message.
+        status_code: HTTP status attached to a parse error.
+
+    Returns:
+        ``None`` when ``value`` is ``None``, otherwise the count.
+
+    Raises:
+        PartnerAPIError: If ``value`` is present and not a non-negative
+            ``int``. Booleans are rejected.
+    """
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:

@@ -28,6 +28,13 @@ class ExtractionLock:
         lock_class: int,
         lock_id: int,
     ) -> None:
+        """Remember the connection that already holds the advisory lock.
+
+        Args:
+            conn: Dedicated autocommit connection that acquired the lock.
+            lock_class: First advisory-lock key.
+            lock_id: Second advisory-lock key.
+        """
         self._conn = conn
         self._lock_class = lock_class
         self._lock_id = lock_id
@@ -52,9 +59,23 @@ class ExtractionLock:
             )
 
     def __enter__(self) -> ExtractionLock:
+        """Return this lock.
+
+        Returns:
+            This instance. The lock was acquired before construction.
+        """
         return self
 
     def __exit__(self, *_exc: object) -> None:
+        """Release the advisory lock and close its connection.
+
+        Args:
+            *_exc: Exception type, value, and traceback from the ``with``
+                block. They are ignored.
+
+        Returns:
+            ``None``, so an exception inside the block is not suppressed.
+        """
         self.release()
 
 

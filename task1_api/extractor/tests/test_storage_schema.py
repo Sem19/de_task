@@ -52,16 +52,36 @@ CREATE TABLE extract_state (
 
 
 def _statements(script: str) -> list[str]:
+    """Split a SQL script into statements, dropping ``--`` comment lines.
+
+    Args:
+        script: Warehouse DDL. Statements are separated by semicolons.
+
+    Returns:
+        Non-empty statements with surrounding whitespace removed.
+    """
     lines = [line for line in script.splitlines() if not line.strip().startswith("--")]
     return [part.strip() for part in "\n".join(lines).split(";") if part.strip()]
 
 
 def _exec_script(conn: psycopg.Connection, script: str) -> None:
+    """Execute each statement in ``script``. Does not commit.
+
+    Args:
+        conn: Open connection.
+        script: SQL script split by :func:`_statements`.
+    """
     for statement in _statements(script):
         conn.execute(statement)
 
 
 def _reset_schema(conn: psycopg.Connection, schema: str) -> None:
+    """Drop and recreate ``schema``, then commit.
+
+    Args:
+        conn: Open connection.
+        schema: Isolated schema name.
+    """
     ident = sql.Identifier(schema)
     conn.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(ident))
     conn.execute(sql.SQL("CREATE SCHEMA {}").format(ident))
@@ -69,6 +89,7 @@ def _reset_schema(conn: psycopg.Connection, schema: str) -> None:
 
 
 def _set_search_path(conn: psycopg.Connection, schema: str) -> None:
+    """Point the session search path at ``schema``."""
     conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(schema)))
 
 
@@ -78,6 +99,14 @@ def _insert_probe(
     *,
     include_timezone: bool,
 ) -> None:
+    """Insert one probe row, with or without ``reporting_timezone``.
+
+    Args:
+        conn: Open connection. The insert is not committed here.
+        schema: Warehouse schema.
+        include_timezone: When false, omit the column so a legacy table can
+            accept the row.
+    """
     table = sql.Identifier(schema, "partner_report")
     extracted_at = datetime.now(timezone.utc)
     if include_timezone:

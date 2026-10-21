@@ -18,6 +18,8 @@ MAKEFILE = REPO_ROOT / "Makefile"
 
 
 class CrontabContractTest(unittest.TestCase):
+    """Supercronic crontab and the schedule-run script, without Docker."""
+
     def test_schedule_is_every_fifteen_minutes(self) -> None:
         text = CRONTAB.read_text(encoding="utf-8")
         jobs = [

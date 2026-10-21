@@ -28,6 +28,7 @@ DATE_TO = "2026-10-21"
 
 
 def make_report(**overrides: Any) -> Report:
+    """Return a ``DONE`` report, with ``overrides`` replacing defaults."""
     payload: dict[str, Any] = {
         "report_id": "rep_1",
         "status": "DONE",
@@ -38,6 +39,15 @@ def make_report(**overrides: Any) -> Report:
 
 
 def make_rows(raw: list[dict[str, Any]], **overrides: Any) -> ReportRows:
+    """Return downloaded rows whose ``total`` matches ``raw`` unless overridden.
+
+    Args:
+        raw: Page objects.
+        **overrides: Fields replacing the default metadata.
+
+    Returns:
+        A :class:`ReportRows` payload.
+    """
     payload: dict[str, Any] = {
         "rows": raw,
         "total": len(raw),
@@ -52,6 +62,8 @@ def make_rows(raw: list[dict[str, Any]], **overrides: Any) -> ReportRows:
 
 
 class ValidateReportTest(unittest.TestCase):
+    """Whole-snapshot integrity checks."""
+
     def test_valid_complete_report(self) -> None:
         raw = [
             valid_row(date="2026-10-15", country="US", channel="search"),

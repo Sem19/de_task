@@ -94,12 +94,36 @@ def normalize_row(
 
 
 def _as_mapping(row: Any, *, index: int | None) -> Mapping[str, Any]:
+    """Return ``row`` when it is a mapping.
+
+    Args:
+        row: One raw page element.
+        index: Zero-based position when known.
+
+    Returns:
+        The same mapping.
+
+    Raises:
+        RowValidationError: If ``row`` is not a mapping. Field name ``"row"``.
+    """
     if isinstance(row, Mapping):
         return row
     _fail("must be an object", field="row", index=index, row=None)
 
 
 def _parse_date(row: Mapping[str, Any], *, index: int | None) -> date:
+    """Parse the required ``date`` field as a calendar date.
+
+    Args:
+        row: Raw row object.
+        index: Zero-based position when known.
+
+    Returns:
+        The reporting date.
+
+    Raises:
+        RowValidationError: If ``date`` is missing, null, or not ``YYYY-MM-DD``.
+    """
     value = _require_value(row, "date", index=index)
     try:
         return parse_calendar_date(value)
@@ -108,6 +132,19 @@ def _parse_date(row: Mapping[str, Any], *, index: int | None) -> date:
 
 
 def _parse_key(row: Mapping[str, Any], field: str, *, index: int | None) -> str:
+    """Return a stripped, non-empty string dimension.
+
+    Args:
+        row: Raw row object.
+        field: Dimension name, such as ``country`` or ``channel``.
+        index: Zero-based position when known.
+
+    Returns:
+        The stripped key.
+
+    Raises:
+        RowValidationError: If the field is missing, null, or blank.
+    """
     value = _require_value(row, field, index=index)
     if not isinstance(value, str):
         _fail("must be a non-empty string", field=field, index=index, row=row)
@@ -118,6 +155,22 @@ def _parse_key(row: Mapping[str, Any], field: str, *, index: int | None) -> str:
 
 
 def _parse_count(row: Mapping[str, Any], field: str, *, index: int | None) -> int:
+    """Return a required count as a PostgreSQL bigint.
+
+    Booleans are rejected even though ``bool`` is a subclass of ``int``.
+
+    Args:
+        row: Raw row object.
+        field: Count metric name.
+        index: Zero-based position when known.
+
+    Returns:
+        The integer count.
+
+    Raises:
+        RowValidationError: If the field is missing, not an ``int``, or
+            outside the bigint range.
+    """
     value = _require_value(row, field, index=index)
     if isinstance(value, bool) or not isinstance(value, int):
         _fail("must be an integer", field=field, index=index, row=row)
@@ -125,6 +178,20 @@ def _parse_count(row: Mapping[str, Any], field: str, *, index: int | None) -> in
 
 
 def _parse_money(row: Mapping[str, Any], field: str, *, index: int | None) -> int:
+    """Parse a minor-unit money string into a PostgreSQL bigint.
+
+    Args:
+        row: Raw row object.
+        field: ``spend`` or ``revenue``.
+        index: Zero-based position when known.
+
+    Returns:
+        The integer minor units. The sign is preserved.
+
+    Raises:
+        RowValidationError: If the field is missing, or is not an
+            optional-sign digit string inside the bigint range.
+    """
     value = _require_value(row, field, index=index)
     if not isinstance(value, str) or not _MONEY_RE.fullmatch(value):
         _fail(
@@ -137,6 +204,19 @@ def _parse_money(row: Mapping[str, Any], field: str, *, index: int | None) -> in
 
 
 def _require_value(row: Mapping[str, Any], field: str, *, index: int | None) -> Any:
+    """Return a required field that is present and not null.
+
+    Args:
+        row: Raw row object.
+        field: API field name.
+        index: Zero-based position when known.
+
+    Returns:
+        The raw value.
+
+    Raises:
+        RowValidationError: If the field is absent or ``None``.
+    """
     if field not in row:
         _fail("is missing", field=field, index=index, row=row)
     value = row[field]
@@ -152,6 +232,21 @@ def _require_bigint(
     index: int | None,
     row: Mapping[str, Any],
 ) -> int:
+    """Return ``value`` when it fits in a signed PostgreSQL bigint.
+
+    Args:
+        value: Already parsed integer.
+        field: API field name used in the error.
+        index: Zero-based position when known.
+        row: Raw row, used only to add grain context to the message.
+
+    Returns:
+        ``value``.
+
+    Raises:
+        RowValidationError: If ``value`` is outside
+            ``POSTGRES_BIGINT_MIN``..``POSTGRES_BIGINT_MAX``.
+    """
     if not POSTGRES_BIGINT_MIN <= value <= POSTGRES_BIGINT_MAX:
         _fail(
             "is outside the PostgreSQL bigint range",
@@ -169,6 +264,17 @@ def _fail(
     index: int | None,
     row: Mapping[str, Any] | None,
 ) -> NoReturn:
+    """Raise :class:`RowValidationError` with the row index and grain context.
+
+    Args:
+        reason: Phrase appended after the field name.
+        field: API field that failed.
+        index: Zero-based position when known.
+        row: Raw row used for dimension context. ``None`` omits that context.
+
+    Raises:
+        RowValidationError: Always.
+    """
     parts: list[str] = []
     if index is not None:
         parts.append(f"row {index}")
@@ -181,6 +287,15 @@ def _fail(
 
 
 def _record_context(row: Mapping[str, Any] | None) -> str:
+    """Return ``date``, ``country``, and ``channel`` fragments for an error.
+
+    Args:
+        row: Raw row, or ``None`` when the payload was not an object.
+
+    Returns:
+        A comma-separated ``key=value`` string, or ``""`` when no dimension
+        is present.
+    """
     if row is None:
         return ""
     bits = []

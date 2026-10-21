@@ -133,6 +133,17 @@ def _delete_slice(
     date_from: date,
     date_to: date,
 ) -> list[tuple[Any, ...]]:
+    """Delete the inclusive date slice and return the removed business rows.
+
+    Args:
+        conn: Open connection. The statement is not committed.
+        table: Schema-qualified ``partner_report`` identifier.
+        date_from: Inclusive slice start.
+        date_to: Inclusive slice end.
+
+    Returns:
+        ``RETURNING`` rows of grain plus business fields, in database order.
+    """
     returning = sql.SQL(", ").join(sql.Identifier(name) for name in _RETURNING)
     cursor = conn.execute(
         sql.SQL(
@@ -150,6 +161,16 @@ def _insert_rows(
     snapshot: ValidatedReport,
     extracted_at: datetime,
 ) -> None:
+    """COPY snapshot rows into ``partner_report``.
+
+    An empty snapshot is a no-op, so a delete-only replace stays valid.
+
+    Args:
+        conn: Open connection. The copy is not committed.
+        table: Schema-qualified ``partner_report`` identifier.
+        snapshot: Validated rows and account identity.
+        extracted_at: Timezone-aware timestamp stored on every inserted row.
+    """
     if not snapshot.rows:
         return
     columns = sql.SQL(", ").join(
@@ -167,6 +188,16 @@ def _copy_tuple(
     snapshot: ValidatedReport,
     extracted_at: datetime,
 ) -> tuple[object, ...]:
+    """Return one COPY row in ``PARTNER_REPORT_COLUMNS`` order.
+
+    Args:
+        row: Normalized grain and metrics.
+        snapshot: Source of currency, timezone, and ``data_version``.
+        extracted_at: Load timestamp.
+
+    Returns:
+        Values aligned with ``PARTNER_REPORT_COLUMNS``.
+    """
     return (
         row.report_date,
         row.country,
@@ -189,6 +220,17 @@ def _summarize(
     snapshot: ValidatedReport,
     previous: list[tuple[Any, ...]],
 ) -> LoadResult:
+    """Compare the deleted slice with the snapshot at grain level.
+
+    Args:
+        snapshot: Rows just inserted.
+        previous: Rows returned by the slice ``DELETE``.
+
+    Returns:
+        Physical delete and insert counts, plus grain-level added, removed,
+        updated, and unchanged counts. ``data_version`` and ``extracted_at``
+        are not part of the comparison.
+    """
     old_map = {_row_grain(item): _row_metrics(item) for item in previous}
     new_map = {
         _snapshot_grain(row): _snapshot_metrics(row, snapshot) for row in snapshot.rows
@@ -210,21 +252,55 @@ def _summarize(
 
 
 def _row_grain(item: tuple[Any, ...]) -> Grain:
+    """Return ``(report_date, country, channel)`` from a deleted row.
+
+    Args:
+        item: One ``RETURNING`` tuple. The grain is the leading columns.
+
+    Returns:
+        The reporting grain.
+    """
     report_date, country, channel = item[:_GRAIN_LEN]
     return (report_date, country, channel)
 
 
 def _row_metrics(item: tuple[Any, ...]) -> tuple[Any, ...]:
+    """Return the business fields that follow the grain in a deleted row.
+
+    Args:
+        item: One ``RETURNING`` tuple, grain columns first.
+
+    Returns:
+        Counts, minor-unit money, currency, and reporting timezone.
+    """
     return item[_GRAIN_LEN:]
 
 
 def _snapshot_grain(row: NormalizedRow) -> Grain:
+    """Return the snapshot row's reporting grain.
+
+    Args:
+        row: Normalized row.
+
+    Returns:
+        ``(report_date, country, channel)``.
+    """
     return row.grain
 
 
 def _snapshot_metrics(
     row: NormalizedRow, snapshot: ValidatedReport
 ) -> tuple[object, ...]:
+    """Return business fields for one snapshot row, including account identity.
+
+    Args:
+        row: Normalized metrics.
+        snapshot: Source of currency and timezone.
+
+    Returns:
+        Counts, minor-unit money, currency, and reporting timezone, in
+        ``_BUSINESS_FIELDS`` order.
+    """
     return (
         row.impressions,
         row.clicks,

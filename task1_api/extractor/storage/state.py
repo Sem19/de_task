@@ -77,7 +77,11 @@ class ExtractState:
 
     @property
     def next_incremental_start(self) -> date | None:
-        """Return ``settled_through + 1 day``, or ``None`` if never settled."""
+        """Return the first date the next incremental run must include.
+
+        Returns:
+            ``settled_through + 1 day``, or ``None`` when nothing has settled.
+        """
         if self.settled_through is None:
             return None
         return self.settled_through + _ONE_DAY
@@ -93,6 +97,10 @@ def read_state(
     Args:
         conn: Open PostgreSQL connection.
         schema: Warehouse schema. Defaults to ``public``.
+
+    Returns:
+        The checkpoint for ``partner_report``, or ``None`` when that key
+        has never been written.
     """
     table = sql.Identifier(schema, "extract_state")
     row = conn.execute(
@@ -148,6 +156,17 @@ def apply_snapshot(
 def _reject_identity_change(
     current: ExtractState | None, snapshot: ValidatedReport
 ) -> None:
+    """Reject a snapshot whose currency or timezone differs from the checkpoint.
+
+    The first snapshot is accepted. Later snapshots must keep both values.
+
+    Args:
+        current: Stored checkpoint, or ``None`` before the first success.
+        snapshot: Snapshot about to be loaded.
+
+    Raises:
+        StateConflictError: If currency or reporting timezone changed.
+    """
     if current is None:
         return
     if snapshot.currency != current.currency:
@@ -167,6 +186,19 @@ def _next_state(
     snapshot: ValidatedReport,
     extracted_at: datetime,
 ) -> ExtractState:
+    """Build the checkpoint that should be written after this snapshot.
+
+    Currency and timezone stay frozen after the first commit. Coverage
+    watermarks move only when this window extends the contiguous prefix.
+
+    Args:
+        current: Stored checkpoint, or ``None`` before the first success.
+        snapshot: Snapshot just written on the load connection.
+        extracted_at: Load timestamp stored on the checkpoint.
+
+    Returns:
+        The uncommitted next checkpoint.
+    """
     return ExtractState(
         loaded_through=_next_loaded_through(current, snapshot),
         loaded_from=_next_loaded_from(current, snapshot),
@@ -191,7 +223,17 @@ def _next_loaded_through(
     """Extend the contiguous coverage prefix, or keep the previous end.
 
     The first successful window becomes the baseline even if earlier dates
-    were never loaded.
+    were never loaded. A window that does not touch that prefix leaves the
+    watermark where it is.
+
+    Args:
+        current: Stored checkpoint, or ``None`` before the first success.
+        snapshot: Snapshot being applied.
+
+    Returns:
+        The new inclusive ``loaded_through``, or the previous value when
+        this window does not extend coverage. ``None`` only when nothing
+        has been loaded yet and this snapshot does not extend coverage.
     """
     previous = None if current is None else current.loaded_through
     if not _extends_coverage(current, snapshot):
@@ -207,6 +249,13 @@ def _next_loaded_from(current: ExtractState | None, snapshot: ValidatedReport) -
     The first window is the baseline. A later adjoining chunk keeps the
     earliest start. A gapped historical island does not pretend the hole
     was loaded.
+
+    Args:
+        current: Stored checkpoint, or ``None`` before the first success.
+        snapshot: Snapshot being applied.
+
+    Returns:
+        Inclusive ``loaded_from`` after this snapshot.
     """
     if current is None:
         return snapshot.date_from
@@ -224,6 +273,20 @@ def _next_loaded_from(current: ExtractState | None, snapshot: ValidatedReport) -
 def _overlaps_or_adjoins(
     prefix_start: date, prefix_end: date, date_from: date, date_to: date
 ) -> bool:
+    """Return whether a window touches the loaded prefix, including a shared edge.
+
+    Adjacent days count as contiguous, so the next chunk can extend the
+    prefix. A one-day hole does not.
+
+    Args:
+        prefix_start: Inclusive start of the loaded prefix.
+        prefix_end: Inclusive end of the loaded prefix.
+        date_from: Inclusive start of the new window.
+        date_to: Inclusive end of the new window.
+
+    Returns:
+        ``True`` when the ranges overlap or share a boundary day.
+    """
     return date_from <= prefix_end + _ONE_DAY and date_to >= prefix_start - _ONE_DAY
 
 
@@ -232,9 +295,18 @@ def _next_settled_through(
 ) -> date | None:
     """Settle only immutable dates that adjoin already-processed settlement.
 
-    Dates ``>= restated_through`` stay mutable. A gap after
+    Dates on or after ``restated_through`` stay mutable. A gap after
     ``settled_through`` does not skip. When there is no checkpoint yet, the
     current window is the baseline.
+
+    Args:
+        current: Stored checkpoint, or ``None`` before the first success.
+        snapshot: Snapshot being applied.
+
+    Returns:
+        The new inclusive ``settled_through``, or the previous value when
+        this window adds no newly immutable dates. ``None`` when nothing
+        has settled.
     """
     previous = None if current is None else current.settled_through
     immutable_end = snapshot.restated_through - _ONE_DAY
@@ -249,6 +321,18 @@ def _next_settled_through(
 
 
 def _extends_coverage(current: ExtractState | None, snapshot: ValidatedReport) -> bool:
+    """Return whether this snapshot may move ``loaded_through``.
+
+    The first window always extends coverage. A later window must adjoin
+    ``loaded_through``, or adjoin ``settled_through`` when that cursor exists.
+
+    Args:
+        current: Stored checkpoint, or ``None``.
+        snapshot: Snapshot being applied.
+
+    Returns:
+        ``True`` when ``loaded_through`` should consider this window.
+    """
     if current is None or current.loaded_through is None:
         return True
     if _contiguous_with_settled(current.loaded_through, snapshot.date_from):
@@ -259,10 +343,19 @@ def _extends_coverage(current: ExtractState | None, snapshot: ValidatedReport) -
 
 
 def _contiguous_with_settled(previous: date | None, date_from: date) -> bool:
-    """Return True if ``date_from`` adjoins or overlaps ``previous``.
+    """Return whether ``date_from`` adjoins or overlaps ``previous``.
 
     ``previous is None`` means no checkpoint yet, so the current window is
-    accepted as the initial baseline.
+    accepted as the initial baseline. The next calendar day counts as
+    adjoining. A one-day hole does not.
+
+    Args:
+        previous: Inclusive end already settled or loaded, or ``None``.
+        date_from: Inclusive start of the new window.
+
+    Returns:
+        ``True`` when there is no previous end, or ``date_from`` is at most
+        one day after it.
     """
     if previous is None:
         return True
@@ -270,6 +363,16 @@ def _contiguous_with_settled(previous: date | None, date_from: date) -> bool:
 
 
 def _write_state(conn: psycopg.Connection, state: ExtractState, *, schema: str) -> None:
+    """Upsert the checkpoint. Does not commit.
+
+    Args:
+        conn: Open load connection.
+        state: Checkpoint stored under ``EXTRACT_STATE_KEY``.
+        schema: Warehouse schema.
+
+    Raises:
+        StorageError: If the upsert fails.
+    """
     table = sql.Identifier(schema, "extract_state")
     try:
         conn.execute(
@@ -288,6 +391,18 @@ def _write_state(conn: psycopg.Connection, state: ExtractState, *, schema: str) 
 
 
 def _to_payload(state: ExtractState) -> dict[str, object]:
+    """Serialize a checkpoint to the JSON object stored in ``extract_state``.
+
+    Args:
+        state: Checkpoint to store.
+
+    Returns:
+        A JSON-ready mapping. Dates are ISO calendar strings. Absent
+        watermarks are ``None``.
+
+    Raises:
+        StorageError: If ``last_extracted_at`` is naive.
+    """
     extracted_at = state.last_extracted_at
     if extracted_at.tzinfo is None:
         raise StorageError("last_extracted_at must be timezone-aware")
@@ -308,6 +423,17 @@ def _to_payload(state: ExtractState) -> dict[str, object]:
 
 
 def _from_payload(payload: dict[str, object]) -> ExtractState:
+    """Rebuild a checkpoint from the JSON object in ``extract_state``.
+
+    Checkpoints written before ``loaded_from`` existed use
+    ``last_date_from`` as the coverage start.
+
+    Args:
+        payload: Decoded ``value`` column.
+
+    Returns:
+        The stored checkpoint.
+    """
     extracted_raw = str(payload["last_extracted_at"])
     extracted_at = datetime.fromisoformat(extracted_raw)
     loaded_from_raw = payload.get("loaded_from")
@@ -334,12 +460,28 @@ def _from_payload(payload: dict[str, object]) -> ExtractState:
 
 
 def _optional_date(value: object) -> date | None:
+    """Parse an ISO date, or return ``None`` when the watermark is absent.
+
+    Args:
+        value: JSON value. ``None`` means the watermark was never set.
+
+    Returns:
+        The calendar date, or ``None``.
+    """
     if value is None:
         return None
     return parse_calendar_date(str(value))
 
 
 def _iso(value: date | None) -> str | None:
+    """Return an ISO calendar date, or ``None`` when the watermark is absent.
+
+    Args:
+        value: Calendar date, or ``None``.
+
+    Returns:
+        ``YYYY-MM-DD``, or ``None``.
+    """
     if value is None:
         return None
     return value.isoformat()

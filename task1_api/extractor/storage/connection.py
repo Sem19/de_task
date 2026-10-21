@@ -61,7 +61,15 @@ def connection(settings: Settings) -> Iterator[psycopg.Connection]:
 
 
 def safe_dsn_context(dsn: str) -> str:
-    """Return host metadata for logs, without password or the full DSN."""
+    """Return host metadata for logs, without the password or the full DSN.
+
+    Args:
+        dsn: PostgreSQL URL. It is parsed, not opened.
+
+    Returns:
+        ``user=... host=... port=... dbname=...``. Missing user, host, or
+        database become ``?``. A missing port becomes ``5432``.
+    """
     parsed = urlparse(dsn)
     host = parsed.hostname or "?"
     port = parsed.port or 5432
@@ -71,6 +79,17 @@ def safe_dsn_context(dsn: str) -> str:
 
 
 def _require_dsn(settings: Settings) -> str:
+    """Return a stripped PostgreSQL DSN.
+
+    Args:
+        settings: Runtime settings.
+
+    Returns:
+        ``settings.pg_dsn`` with surrounding whitespace removed.
+
+    Raises:
+        ConfigError: If the DSN is missing or blank.
+    """
     dsn = (settings.pg_dsn or "").strip()
     if not dsn:
         raise ConfigError("missing PostgreSQL DSN (PG_DSN)")

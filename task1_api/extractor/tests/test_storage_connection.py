@@ -41,9 +41,11 @@ class FakeConnection:
     """Stand-in for psycopg.Connection used by unit tests."""
 
     def __init__(self) -> None:
+        """Start open."""
         self.closed = False
 
     def close(self) -> None:
+        """Mark the connection closed."""
         self.closed = True
 
 

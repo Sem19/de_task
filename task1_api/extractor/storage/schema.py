@@ -93,7 +93,21 @@ def table_columns(
     *,
     schema: str = WAREHOUSE_SCHEMA,
 ) -> dict[str, tuple[str, bool]]:
-    """Return ``{column: (data_type, is_nullable)}`` for one table."""
+    """Return ``{column: (data_type, is_nullable)}`` for one table.
+
+    A missing table is an empty mapping, not an error. ``data_type`` is the
+    ``information_schema`` name (``bigint``, ``text``,
+    ``timestamp with time zone``).
+
+    Args:
+        conn: Open PostgreSQL connection. Only a catalog query is issued.
+        table: Unqualified table name.
+        schema: Warehouse schema. Defaults to ``public``.
+
+    Returns:
+        Column name to ``(data_type, is_nullable)``. ``is_nullable`` is
+        ``True`` when the catalog says ``YES``.
+    """
     rows = conn.execute(
         """
         SELECT column_name, data_type, is_nullable
@@ -111,7 +125,20 @@ def table_primary_key(
     *,
     schema: str = WAREHOUSE_SCHEMA,
 ) -> tuple[str, ...]:
-    """Return primary-key columns in ordinal order."""
+    """Return primary-key columns in ``ordinal_position`` order.
+
+    Only ``PRIMARY KEY`` is considered. A missing table or a table with no
+    primary key is an empty tuple, not an error.
+
+    Args:
+        conn: Open PostgreSQL connection. Only a catalog query is issued.
+        table: Unqualified table name.
+        schema: Warehouse schema. Defaults to ``public``.
+
+    Returns:
+        Column names from left to right. Empty when the table is missing
+        or has no primary key.
+    """
     rows = conn.execute(
         """
         SELECT kcu.column_name
@@ -136,7 +163,21 @@ def column_default(
     *,
     schema: str = WAREHOUSE_SCHEMA,
 ) -> str | None:
-    """Return the column default expression, or ``None`` if unset or missing."""
+    """Return the catalog default expression, or ``None`` if unset or missing.
+
+    The value is the expression stored by PostgreSQL, such as ``now()``,
+    not the value that expression would produce.
+
+    Args:
+        conn: Open PostgreSQL connection. Only a catalog query is issued.
+        table: Unqualified table name.
+        column: Column name.
+        schema: Warehouse schema. Defaults to ``public``.
+
+    Returns:
+        ``column_default`` as text, or ``None`` when the column has no
+        default or the column does not exist.
+    """
     row = conn.execute(
         """
         SELECT column_default
@@ -160,6 +201,22 @@ def _require_table(
     schema: str,
     no_default: frozenset[str] = frozenset(),
 ) -> None:
+    """Reject a table whose columns or primary key cannot store the contract.
+
+    Args:
+        conn: Open PostgreSQL connection. Only catalog queries are issued.
+        table: Unqualified table name.
+        expected: Required ``{column: data_type}`` mapping.
+        nullable: Columns that may be nullable. Every other expected column
+            must be ``NOT NULL``.
+        grain: Expected primary-key columns in ordinal order.
+        schema: Warehouse schema.
+        no_default: Columns that must not have a column default.
+
+    Raises:
+        SchemaError: If the table is missing, or a column, type, nullability,
+            default, or primary key does not match.
+    """
     columns = table_columns(conn, table, schema=schema)
     if not columns:
         raise SchemaError(f"table {schema}.{table} does not exist")

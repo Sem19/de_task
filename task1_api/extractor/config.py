@@ -74,12 +74,26 @@ REPORT_STATUSES_FAILED = frozenset({"FAILED", "ERROR", "CANCELLED"})
 
 
 def report_status_path(report_id: str) -> str:
-    """Return ``GET /v2/reports/{report_id}``."""
+    """Return the path for ``GET /v2/reports/{report_id}``.
+
+    Args:
+        report_id: Partner job id. Inserted without extra quoting.
+
+    Returns:
+        ``/v2/reports/{report_id}``.
+    """
     return f"{REPORTS_PATH}/{report_id}"
 
 
 def report_rows_path(report_id: str) -> str:
-    """Return ``GET /v2/reports/{report_id}/rows``."""
+    """Return the path for ``GET /v2/reports/{report_id}/rows``.
+
+    Args:
+        report_id: Partner job id. Inserted without extra quoting.
+
+    Returns:
+        ``/v2/reports/{report_id}/rows``.
+    """
     return f"{REPORTS_PATH}/{report_id}/rows"
 
 
@@ -146,6 +160,16 @@ class Settings:
 
 
 def _optional(env: Mapping[str, str], name: str, default: str) -> str:
+    """Return a stripped environment value, or ``default`` when blank.
+
+    Args:
+        env: Environment mapping.
+        name: Variable name.
+        default: Value used when the variable is missing or whitespace.
+
+    Returns:
+        The stripped value, or ``default``.
+    """
     value = env.get(name)
     if value is None or not str(value).strip():
         return default
@@ -153,6 +177,18 @@ def _optional(env: Mapping[str, str], name: str, default: str) -> str:
 
 
 def _require(env: Mapping[str, str], name: str) -> str:
+    """Return a stripped required environment value.
+
+    Args:
+        env: Environment mapping.
+        name: Variable name.
+
+    Returns:
+        The stripped value.
+
+    Raises:
+        ConfigError: If the variable is missing or blank.
+    """
     value = env.get(name)
     if value is None or not str(value).strip():
         raise ConfigError(f"missing required environment variable: {name}")

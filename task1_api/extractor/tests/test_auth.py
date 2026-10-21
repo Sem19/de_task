@@ -11,6 +11,8 @@ from tests.helpers import VALID_SETTINGS, MockAPI, make_client
 
 
 class SettingsTest(unittest.TestCase):
+    """Settings loaded from an environment mapping."""
+
     def test_from_env_loads_required_values(self) -> None:
         settings = Settings.from_env(
             {
@@ -44,6 +46,8 @@ class SettingsTest(unittest.TestCase):
 
 
 class PartnerAPIClientTest(unittest.TestCase):
+    """OAuth, account metadata, and client lifecycle against MockAPI."""
+
     def test_successful_authentication(self) -> None:
         api = MockAPI()
         with make_client(api) as client:
@@ -137,6 +141,8 @@ class PartnerAPIClientTest(unittest.TestCase):
 
 
 class PublicInterfaceTest(unittest.TestCase):
+    """Package exports stay aligned with the client module."""
+
     def test_package_exports_match_previous_module(self) -> None:
         import api_client
 

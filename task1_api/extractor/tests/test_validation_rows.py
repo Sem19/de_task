@@ -37,6 +37,8 @@ def valid_row(**overrides: Any) -> dict[str, Any]:
 
 
 class NormalizeRowTest(unittest.TestCase):
+    """Per-row type, range, and normalization checks."""
+
     def test_valid_record_normalization(self) -> None:
         result = normalize_row(valid_row())
         self.assertEqual(
@@ -263,6 +265,8 @@ class NormalizeRowTest(unittest.TestCase):
 
 
 class RequiredFieldsContractTest(unittest.TestCase):
+    """Required fields cover the grain, counts, and money."""
+
     def test_required_fields_cover_grain_counts_and_money(self) -> None:
         self.assertEqual(REPORT_DIMENSIONS, ("date", "country", "channel"))
         self.assertEqual(

@@ -50,17 +50,44 @@ EXTRACTED_AT = datetime(2026, 10, 21, 15, 0, tzinfo=timezone.utc)
 
 
 def _public_count(conn) -> int:
+    """Return the row count of ``public.partner_report``.
+
+    Args:
+        conn: Open warehouse connection.
+
+    Returns:
+        The number of rows in the shared schema, used to prove a test
+        schema did not leak.
+    """
     row = conn.execute("SELECT count(*) FROM public.partner_report").fetchone()
     assert row is not None
     return int(row[0])
 
 
 def _validated(date_from: str, date_to: str, **kwargs):
+    """Build and validate one snapshot for ``date_from``..``date_to``.
+
+    Args:
+        date_from: Inclusive start, ``YYYY-MM-DD``.
+        date_to: Inclusive end, ``YYYY-MM-DD``.
+        **kwargs: Forwarded to the shared payload builder.
+
+    Returns:
+        A :class:`ValidatedReport`.
+    """
     done, body = _payload(date_from, date_to, **kwargs)
     return validate_report(done, body, ACCOUNT, date_from, date_to)
 
 
 def _stored_from_snapshot(snapshot) -> tuple[StoredRow, ...]:
+    """Project a validated snapshot into the shape stored in PostgreSQL.
+
+    Args:
+        snapshot: Source rows and account identity.
+
+    Returns:
+        One :class:`StoredRow` per snapshot row, in the same order.
+    """
     return tuple(
         StoredRow(
             report_date=row.report_date,
@@ -117,6 +144,7 @@ class RecoveringAPI(MockAPI):
     """Partner mock that recovers from token expiry and a transient POST 500."""
 
     def _account(self, request: httpx.Request) -> httpx.Response:
+        """Fail the first account call as expired and the second as HTTP 500."""
         denied = self._unauthorized(request)
         if denied is not None:
             return denied
@@ -248,14 +276,17 @@ class IsolatedWarehouseTest(unittest.TestCase):
         self.assertEqual(public_after, self.public_rows_before)
 
     def _lock(self, settings=None):
+        """Acquire the extractor lock on the isolated test lock id."""
         return acquire_extraction_lock(settings or self.settings, lock_id=TEST_LOCK_ID)
 
     def _load(self, snapshot, extracted_at=EXTRACTED_AT) -> None:
+        """Commit ``snapshot`` into the isolated test schema."""
         commit_snapshot(
             self.settings, snapshot, schema=TEST_SCHEMA, extracted_at=extracted_at
         )
 
     def _stored(self, snapshot=None) -> tuple[StoredRow, ...]:
+        """Read warehouse rows, limited to ``snapshot``'s window when given."""
         with connection(self.settings) as conn:
             if snapshot is None:
                 return fetch_stored_rows(conn, schema=TEST_SCHEMA)
@@ -267,6 +298,7 @@ class IsolatedWarehouseTest(unittest.TestCase):
             )
 
     def _assert_match(self, snapshot) -> None:
+        """Assert the warehouse slice matches ``snapshot`` with no drift."""
         result = reconcile(snapshot, self._stored(snapshot))
         self.assertTrue(result.ok, result.summary())
         self.assertEqual(result.source_rows, len(snapshot.rows))
@@ -277,6 +309,15 @@ class IsolatedWarehouseTest(unittest.TestCase):
         self.assertEqual(len(result.mismatches), 0)
 
     def _extract(self, client, **kwargs):
+        """Run one extraction against the isolated schema and lock id.
+
+        Args:
+            client: Partner client, usually a :class:`MockAPI` transport.
+            **kwargs: Overrides for :func:`run_extraction`.
+
+        Returns:
+            The :class:`ExtractResult`.
+        """
         params = {
             "settings": self.settings,
             "now_utc": NOW,

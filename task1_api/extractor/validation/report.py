@@ -65,6 +65,19 @@ def validate_report(
 
 
 def _requested_window(date_from: str, date_to: str) -> tuple[date, date]:
+    """Parse the inclusive window the caller asked the partner for.
+
+    Args:
+        date_from: Inclusive start, ``YYYY-MM-DD``.
+        date_to: Inclusive end, ``YYYY-MM-DD``.
+
+    Returns:
+        The start and end dates.
+
+    Raises:
+        ReportValidationError: If either value is not a calendar date, or
+            ``date_to`` is before ``date_from``. Error code ``invalid_window``.
+    """
     try:
         start = parse_calendar_date(date_from)
         end = parse_calendar_date(date_to)
@@ -82,6 +95,15 @@ def _requested_window(date_from: str, date_to: str) -> tuple[date, date]:
 
 
 def _require_done(report: Report) -> None:
+    """Reject a job that has not reached ``DONE``.
+
+    Args:
+        report: Status payload.
+
+    Raises:
+        ReportValidationError: If ``status`` is not ``DONE``. Error code
+            ``not_done``.
+    """
     if report.status != REPORT_STATUS_DONE:
         raise ReportValidationError(
             f"report {report.report_id!r} status is {report.status!r}, expected DONE",
@@ -90,6 +112,18 @@ def _require_done(report: Report) -> None:
 
 
 def _require_complete(report: Report, rows: ReportRows) -> None:
+    """Reject a truncated snapshot or disagreeing row counts.
+
+    Fetched length, page ``total``, and ``report.row_count`` must all match.
+
+    Args:
+        report: ``DONE`` status payload.
+        rows: Downloaded pages.
+
+    Raises:
+        ReportValidationError: Error code ``truncated`` or
+            ``inconsistent_total``.
+    """
     if rows.truncated:
         raise ReportValidationError(
             f"report {report.report_id!r} is truncated",
@@ -110,6 +144,15 @@ def _require_complete(report: Report, rows: ReportRows) -> None:
 
 
 def _require_currency(account: Account, rows: ReportRows) -> None:
+    """Reject a snapshot whose currency differs from the account.
+
+    Args:
+        account: Account metadata.
+        rows: Downloaded pages.
+
+    Raises:
+        ReportValidationError: Error code ``currency_mismatch``.
+    """
     if rows.currency != account.currency:
         raise ReportValidationError(
             f"report currency {rows.currency!r} does not match "
@@ -119,6 +162,15 @@ def _require_currency(account: Account, rows: ReportRows) -> None:
 
 
 def _require_timezone(account: Account, rows: ReportRows) -> None:
+    """Reject a snapshot whose timezone differs from the account.
+
+    Args:
+        account: Account metadata.
+        rows: Downloaded pages.
+
+    Raises:
+        ReportValidationError: Error code ``timezone_mismatch``.
+    """
     if rows.timezone != account.timezone:
         raise ReportValidationError(
             f"report timezone {rows.timezone!r} does not match "
@@ -134,6 +186,18 @@ def _restated_through(rows: ReportRows, account: Account) -> date:
     Dates on or after that value may still move. This check only verifies
     the metadata is a calendar date and the account window is usable. It
     does not require ``restated_through`` to fall inside the requested range.
+
+    Args:
+        rows: Downloaded pages. ``restated_through`` is read from metadata.
+        account: Account whose attribution window must be at least one day.
+
+    Returns:
+        The oldest date that is still mutable.
+
+    Raises:
+        ReportValidationError: Error code ``invalid_restated_through`` when
+            the attribution window is below 1 or the date is not a calendar
+            date.
     """
     if account.attribution_window_days < 1:
         raise ReportValidationError(
@@ -150,6 +214,14 @@ def _restated_through(rows: ReportRows, account: Account) -> date:
 
 
 def _require_unique_grain(rows: Sequence[NormalizedRow]) -> None:
+    """Reject two rows that share ``(report_date, country, channel)``.
+
+    Args:
+        rows: Normalized snapshot in page order.
+
+    Raises:
+        ReportValidationError: Error code ``duplicate_grain``.
+    """
     seen: dict[tuple[date, str, str], int] = {}
     for index, row in enumerate(rows):
         previous = seen.get(row.grain)
@@ -166,6 +238,16 @@ def _require_dates_in_window(
     date_from: date,
     date_to: date,
 ) -> None:
+    """Reject a row date outside the requested inclusive window.
+
+    Args:
+        rows: Normalized snapshot.
+        date_from: Inclusive start.
+        date_to: Inclusive end.
+
+    Raises:
+        ReportValidationError: Error code ``date_out_of_range``.
+    """
     for index, row in enumerate(rows):
         if row.report_date < date_from or row.report_date > date_to:
             raise ReportValidationError(

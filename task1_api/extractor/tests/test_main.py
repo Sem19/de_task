@@ -11,6 +11,8 @@ from pipeline import ExtractResult
 
 
 class ExitCodeTest(unittest.TestCase):
+    """Process exit codes for success, skip, and failure."""
+
     def test_success_is_zero(self) -> None:
         self.assertEqual(exit_code(ExtractResult(status="success", run_id="r1")), 0)
 
@@ -24,6 +26,8 @@ class ExitCodeTest(unittest.TestCase):
 
 
 class MainTest(unittest.TestCase):
+    """``main`` maps configuration and extraction outcomes to exit codes."""
+
     @patch("main.run_extraction")
     @patch("main.Settings.from_env")
     def test_successful_run_exits_zero(self, from_env, run) -> None:

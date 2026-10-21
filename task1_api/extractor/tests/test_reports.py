@@ -18,6 +18,8 @@ from tests.helpers import FakeClock, MockAPI, make_client
 
 
 class ReportClientTest(unittest.TestCase):
+    """Report submission and status polling."""
+
     def test_submit_report_payload(self) -> None:
         api = MockAPI()
         with make_client(api) as client:

@@ -21,6 +21,7 @@ from tests.helpers import ACCOUNT_BODY, VALID_SETTINGS, FakeClock
 
 
 def _settings(**overrides: Any) -> Settings:
+    """Return test settings with short retries, plus ``overrides``."""
     values = {
         "api_base": VALID_SETTINGS.api_base,
         "client_id": VALID_SETTINGS.client_id,
@@ -40,6 +41,17 @@ def _error(
     nested: bool = False,
     retry_after: str | None = None,
 ) -> httpx.Response:
+    """Build an error response with a flat or nested partner error code.
+
+    Args:
+        status: HTTP status.
+        error: Partner error code.
+        nested: When true, wrap the code in ``{"detail": {"error": ...}}``.
+        retry_after: Optional ``Retry-After`` header value.
+
+    Returns:
+        An ``httpx.Response`` with no request attached.
+    """
     body: dict[str, Any]
     if nested:
         body = {"detail": {"error": error}}
@@ -53,12 +65,14 @@ class ScriptedAPI:
     """Queue-driven mock for resilience tests."""
 
     def __init__(self) -> None:
+        """Start with empty call and response queues."""
         self.calls: list[tuple[str, str]] = []
         self.token_calls = 0
         self.account_queue: list[Any] = []
         self.report_queue: list[Any] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        """Dispatch token, account, and report calls to the scripted queues."""
         self.calls.append((request.method, request.url.path))
         if request.method == "POST" and request.url.path == OAUTH_TOKEN_PATH:
             return self._token(request)
@@ -69,6 +83,7 @@ class ScriptedAPI:
         return httpx.Response(404, json={"error": "not_found"})
 
     def _token(self, request: httpx.Request) -> httpx.Response:
+        """Return a bearer token, or 401 when the client credentials are wrong."""
         self.token_calls += 1
         body = json.loads(request.content)
         if (
@@ -92,6 +107,20 @@ class ScriptedAPI:
         *,
         default_account: bool,
     ) -> httpx.Response:
+        """Pop the next scripted result, or return a successful default.
+
+        A queued ``"connect"`` raises :class:`httpx.ConnectError`. A queued
+        response is returned as-is.
+
+        Args:
+            queue: Account or report script. The first item is consumed.
+            request: Request attached to a simulated connect error.
+            default_account: When true and the queue is empty, return the
+                account body. Otherwise return a pending report.
+
+        Returns:
+            The next scripted response, or the default success body.
+        """
         if queue:
             item = queue.pop(0)
             if item == "connect":
@@ -107,6 +136,7 @@ class ScriptedAPI:
 
 
 def _client(api: ScriptedAPI, settings: Settings | None = None) -> PartnerAPIClient:
+    """Return a client whose HTTP transport is ``api``."""
     return PartnerAPIClient(
         settings or _settings(),
         transport=httpx.MockTransport(api),
@@ -114,6 +144,8 @@ def _client(api: ScriptedAPI, settings: Settings | None = None) -> PartnerAPICli
 
 
 class ResilienceTest(unittest.TestCase):
+    """Retries, 429 handling, token refresh, and the local rate limiter."""
+
     def test_retries_429_rate_limited_with_retry_after(self) -> None:
         api = ScriptedAPI()
         api.account_queue = [

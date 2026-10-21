@@ -64,6 +64,19 @@ def _state(
     last_date_from: date | None = None,
     last_date_to: date | None = None,
 ) -> ExtractState:
+    """Build a checkpoint with EUR and the mock timezone filled in.
+
+    Args:
+        settled_through: Inclusive immutable watermark. ``None`` if unset.
+        loaded_through: Inclusive loaded watermark. Defaults to
+            ``settled_through``, or today when that is also unset.
+        loaded_from: Inclusive coverage start. Defaults to the last window start.
+        last_date_from: Last snapshot start. Defaults to the loaded end.
+        last_date_to: Last snapshot end. Defaults to the loaded end.
+
+    Returns:
+        A frozen :class:`ExtractState`.
+    """
     loaded = loaded_through if loaded_through is not None else settled_through or TODAY
     start = last_date_from if last_date_from is not None else loaded
     end = last_date_to if last_date_to is not None else loaded
@@ -84,6 +97,7 @@ def _state(
 
 
 def _load_result(snapshot) -> LoadResult:
+    """Return load counts that treat every snapshot row as newly inserted."""
     return LoadResult(
         deleted=0,
         inserted=len(snapshot.rows),
@@ -105,6 +119,19 @@ def _payload(
     report_id: str = "rep_1",
     restated_through: str = "2026-10-19",
 ) -> tuple[Report, ReportRows]:
+    """Build a ``DONE`` report and a complete rows body for one window.
+
+    Args:
+        date_from: Inclusive start, ``YYYY-MM-DD``.
+        date_to: Inclusive end, ``YYYY-MM-DD``.
+        day: Date used for the default single row. Defaults to ``date_from``.
+        rows: Raw rows. Defaults to one US row.
+        report_id: Partner job id.
+        restated_through: Oldest mutable date in ``meta``.
+
+    Returns:
+        The status payload and the downloaded rows.
+    """
     raw = rows if rows is not None else [valid_row(date=day or date_from, country="US")]
     done = Report(report_id=report_id, status="DONE", row_count=len(raw))
     body = ReportRows(
@@ -120,26 +147,36 @@ def _payload(
 
 
 class FakeLock:
+    """Advisory lock that only records whether :meth:`release` ran."""
+
     def __init__(self) -> None:
+        """Start unreleased."""
         self.released = False
 
     def release(self) -> None:
+        """Mark the lock released. Does not talk to PostgreSQL."""
         self.released = True
 
 
 class FakeConn:
+    """Connection that counts commit, rollback, and close calls."""
+
     def __init__(self) -> None:
+        """Start with every counter at zero."""
         self.commits = 0
         self.rollbacks = 0
         self.closed = False
 
     def commit(self) -> None:
+        """Record one commit."""
         self.commits += 1
 
     def rollback(self) -> None:
+        """Record one rollback."""
         self.rollbacks += 1
 
     def close(self) -> None:
+        """Record that the connection was closed."""
         self.closed = True
 
 
@@ -152,6 +189,12 @@ class ScriptedClient:
         *,
         account: Account = ACCOUNT,
     ) -> None:
+        """Store scripted payloads and start with no calls recorded.
+
+        Args:
+            payloads: Map of ``(date_from, date_to)`` to a done report and rows.
+            account: Account returned by :meth:`get_account`.
+        """
         self.payloads = payloads
         self.account = account
         self.submit_calls: list[tuple[str, str]] = []
@@ -162,9 +205,22 @@ class ScriptedClient:
         self._n = 0
 
     def get_account(self) -> Account:
+        """Return the scripted account metadata."""
         return self.account
 
     def submit_report(self, date_from: str, date_to: str) -> Report:
+        """Record the window and return ``PENDING``, or raise if marked ambiguous.
+
+        Args:
+            date_from: Inclusive start.
+            date_to: Inclusive end.
+
+        Returns:
+            A new pending report id.
+
+        Raises:
+            AmbiguousRequestError: When ``ambiguous`` is set.
+        """
         self.submit_calls.append((date_from, date_to))
         if self.ambiguous:
             raise AmbiguousRequestError(
@@ -175,6 +231,17 @@ class ScriptedClient:
         return Report(report_id=f"rep_{self._n}", status="PENDING")
 
     def wait_for_report(self, report_id: str) -> Report:
+        """Return ``DONE`` for the last submitted window.
+
+        The first call raises :class:`ReportNotFoundError` when ``lost_once``
+        is set.
+
+        Args:
+            report_id: Id returned by :meth:`submit_report`.
+
+        Returns:
+            A ``DONE`` report whose ``row_count`` matches the scripted payload.
+        """
         if self.lost_once and not self._lost_used:
             self._lost_used = True
             raise ReportNotFoundError(report_id)
@@ -183,23 +250,30 @@ class ScriptedClient:
         return Report(report_id=report_id, status="DONE", row_count=done.row_count)
 
     def fetch_rows(self, report_id: str) -> ReportRows:
+        """Return the scripted rows for the last submitted window."""
         date_from, date_to = self.submit_calls[-1]
         _done, rows = self.payloads[(date_from, date_to)]
         return rows
 
     def close(self) -> None:
+        """Mark the client closed."""
         self.closed = True
 
 
 class PipelineTest(unittest.TestCase):
+    """Orchestration with a fake lock, connection, and scripted API."""
+
     def setUp(self) -> None:
         self.lock = FakeLock()
         self.conn = FakeConn()
         self.applied: list = []
 
     def _cm(self, _settings):
+        """Yield :attr:`conn` and close it when the context exits."""
+
         @contextmanager
         def inner():
+            """Yield the fake connection, then close it."""
             try:
                 yield self.conn
             finally:
@@ -208,6 +282,7 @@ class PipelineTest(unittest.TestCase):
         return inner()
 
     def _apply(self, conn, snapshot, *, extracted_at, schema="public"):
+        """Record ``snapshot`` and return a successful uncommitted load."""
         self.applied.append(snapshot)
         return _load_result(snapshot), _state(
             settled_through=date(2026, 10, 18),
@@ -224,6 +299,19 @@ class PipelineTest(unittest.TestCase):
         apply_fn=None,
         **kwargs,
     ):
+        """Run extraction with schema checks and the warehouse patched out.
+
+        Args:
+            client: Scripted partner API.
+            read_state_fn: Replacement for ``read_state``. Defaults to no
+                checkpoint.
+            apply_fn: Replacement for ``apply_snapshot``. Defaults to
+                :meth:`_apply`.
+            **kwargs: Extra arguments for :func:`run_extraction`.
+
+        Returns:
+            The :class:`ExtractResult`.
+        """
         params = {
             "settings": VALID_SETTINGS,
             "now_utc": NOW,
@@ -417,6 +505,7 @@ class PipelineTest(unittest.TestCase):
         )
 
         def boom(*_a, **_k):
+            """Fail the snapshot write before commit."""
             raise StorageError("injected write failure")
 
         result = self._run(client, apply_fn=boom)
@@ -492,6 +581,7 @@ class PipelineTest(unittest.TestCase):
         )
 
         def conflict(*_a, **_k):
+            """Reject the snapshot because the account currency changed."""
             raise StateConflictError("account currency changed from 'EUR' to 'USD'")
 
         result = self._run(client, apply_fn=conflict)
@@ -503,6 +593,8 @@ class PipelineTest(unittest.TestCase):
 
 @unittest.skipUnless(postgres_available(), "PostgreSQL is not available")
 class PipelinePostgresTest(unittest.TestCase):
+    """One extraction against PostgreSQL with the partner API mocked."""
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.settings = settings_with_dsn(integration_dsn())

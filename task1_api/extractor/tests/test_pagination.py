@@ -11,6 +11,8 @@ from tests.helpers import ROW_META, MockAPI, make_client, page, row
 
 
 class ReportRowsTest(unittest.TestCase):
+    """Paged downloads and completeness checks."""
+
     def test_fetch_rows_multiple_pages(self) -> None:
         api = MockAPI()
         first = [row(0), row(1)]

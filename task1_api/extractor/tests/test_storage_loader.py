@@ -27,6 +27,7 @@ EXTRACTED_AT = datetime(2026, 10, 21, 15, 0, tzinfo=timezone.utc)
 
 
 def _row(**overrides: object) -> NormalizedRow:
+    """Return one normalized row, with ``overrides`` replacing defaults."""
     payload: dict[str, object] = {
         "report_date": date(2026, 10, 21),
         "country": "US",
@@ -54,6 +55,21 @@ def _snapshot(
     restated_through: date = date(2026, 10, 19),
     report_id: str = "rep_1",
 ) -> ValidatedReport:
+    """Wrap ``rows`` in a validated snapshot for 20–21 Oct 2026 by default.
+
+    Args:
+        rows: Normalized rows.
+        date_from: Inclusive window start.
+        date_to: Inclusive window end.
+        data_version: Partner data version.
+        currency: Account currency.
+        timezone_name: Account timezone label.
+        restated_through: Oldest mutable date.
+        report_id: Partner job id.
+
+    Returns:
+        A :class:`ValidatedReport`.
+    """
     return ValidatedReport(
         report_id=report_id,
         account_id="acct_5512",
@@ -74,6 +90,16 @@ def _fetch_slice(
     date_from: date,
     date_to: date,
 ) -> list[tuple[object, ...]]:
+    """Return slice rows ordered by grain, including money and version.
+
+    Args:
+        conn: Open connection whose search path can see the test schema.
+        date_from: Inclusive start.
+        date_to: Inclusive end.
+
+    Returns:
+        Selected columns for rows inside the window.
+    """
     table = sql.Identifier(TEST_SCHEMA, "partner_report")
     return list(
         conn.execute(
@@ -92,6 +118,7 @@ def _fetch_slice(
 
 
 def _count_all(conn: psycopg.Connection) -> int:
+    """Return the number of rows in the test ``partner_report`` table."""
     table = sql.Identifier(TEST_SCHEMA, "partner_report")
     row = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(table)).fetchone()
     assert row is not None
@@ -100,6 +127,8 @@ def _count_all(conn: psycopg.Connection) -> int:
 
 @unittest.skipUnless(postgres_available(), "PostgreSQL is not available")
 class ReplaceDateSliceTest(unittest.TestCase):
+    """Transactional date-slice replace against PostgreSQL."""
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.settings = settings_with_dsn(integration_dsn())
@@ -124,6 +153,11 @@ class ReplaceDateSliceTest(unittest.TestCase):
     def _load(
         self, snapshot: ValidatedReport, extracted_at: datetime = EXTRACTED_AT
     ) -> LoadResult:
+        """Replace the slice and commit.
+
+        Returns:
+            Counts from the replace.
+        """
         with connection(self.settings) as conn:
             result = replace_date_slice(
                 conn, snapshot, extracted_at=extracted_at, schema=TEST_SCHEMA

@@ -41,6 +41,7 @@ class PartnerAPIClient:
         *,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        """Open the shared HTTP client and start with an empty token cache."""
         self._settings = settings
         self._http = httpx.Client(
             base_url=settings.api_base,
@@ -52,14 +53,32 @@ class PartnerAPIClient:
         self._v2_limiter = SlidingWindowLimiter(settings.v2_rate_limit_per_min)
 
     def __enter__(self) -> PartnerAPIClient:
+        """Return this client without opening another connection.
+
+        Returns:
+            This instance.
+        """
         return self
 
     def __exit__(self, *exc: object) -> None:
+        """Close the HTTP client.
+
+        Args:
+            *exc: Exception type, value, and traceback from the ``with``
+                block. They are ignored.
+
+        Returns:
+            ``None``, so an exception inside the block is not suppressed.
+        """
         self.close()
 
     @property
     def is_closed(self) -> bool:
-        """Whether the underlying HTTP connection pool has been closed."""
+        """Return whether the underlying HTTP connection pool has been closed.
+
+        Returns:
+            ``True`` after :meth:`close` or after leaving a ``with`` block.
+        """
         return self._http.is_closed
 
     def close(self) -> None:
@@ -161,6 +180,20 @@ class PartnerAPIClient:
         path: str,
         **kwargs: Any,
     ) -> httpx.Response:
+        """Send an authorized request and retry once after a stale token.
+
+        A 401 is retried only when the partner error is ``token_expired`` or
+        ``invalid_token``. Other 401 responses are returned unchanged.
+
+        Args:
+            method: HTTP method.
+            path: Request path relative to the API origin.
+            **kwargs: Passed to :meth:`_send`. A caller ``headers`` mapping
+                is copied and given an ``Authorization`` bearer value.
+
+        Returns:
+            The first response, or the response after one token refresh.
+        """
         headers = dict(kwargs.pop("headers", None) or {})
         headers["Authorization"] = f"Bearer {self.get_token()}"
         response = self._send(method, path, headers=headers, **kwargs)
@@ -179,6 +212,21 @@ class PartnerAPIClient:
         return self._send(method, path, headers=headers, **kwargs)
 
     def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send one request through retries and the local ``/v2`` limiter.
+
+        Args:
+            method: HTTP method.
+            path: Request path.
+            **kwargs: Passed to ``httpx.Client.request``.
+
+        Returns:
+            The response from :func:`execute_with_retries`.
+
+        Raises:
+            AmbiguousRequestError: A ``POST /v2/reports`` attempt may have
+                created a job.
+            RetryExhaustedError: Retryable failures used every attempt.
+        """
         return execute_with_retries(
             lambda: self._http.request(method, path, **kwargs),
             method,
@@ -188,6 +236,16 @@ class PartnerAPIClient:
         )
 
     def _ensure_success(self, response: httpx.Response, path: str) -> None:
+        """Raise when ``response`` is not a successful HTTP status.
+
+        Args:
+            response: Response to check.
+            path: Path included in the error message.
+
+        Raises:
+            PartnerAPIError: If the status is not 2xx. The partner error
+                code is attached when the body contains one.
+        """
         if response.is_success:
             return
         error = partner_error_code(response)
@@ -200,6 +258,18 @@ class PartnerAPIClient:
         )
 
     def _json_object(self, response: httpx.Response, path: str) -> dict[str, Any]:
+        """Decode a JSON object body.
+
+        Args:
+            response: Response whose body should be a JSON object.
+            path: Path included in the error message.
+
+        Returns:
+            The decoded object.
+
+        Raises:
+            PartnerAPIError: If the body is not JSON or not an object.
+        """
         try:
             payload = response.json()
         except ValueError as exc:

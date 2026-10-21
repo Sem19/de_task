@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 def configure_logging() -> None:
-    """Configure process-wide logging. Secrets are never added here."""
+    """Configure process-wide logging from ``LOG_LEVEL``.
+
+    Unknown level names fall back to ``INFO``. The format is time, level,
+    logger name, and message. Credentials are not attached to the logger.
+    """
     raw = os.environ.get("LOG_LEVEL", "INFO").strip().upper() or "INFO"
     level = getattr(logging, raw, logging.INFO)
     logging.basicConfig(
@@ -27,12 +31,29 @@ def configure_logging() -> None:
 
 
 def exit_code(result: ExtractResult) -> int:
-    """Return 0 for success or skip, 1 for extraction failure."""
+    """Return the process code for one extraction result.
+
+    Args:
+        result: Outcome from :func:`run_extraction`.
+
+    Returns:
+        ``1`` when ``status`` is ``failed``. ``success`` and ``skipped``
+        both return ``0``.
+    """
     return 1 if result.status == STATUS_FAILED else 0
 
 
 def main() -> int:
-    """Load settings, run one extraction, and return a process exit code."""
+    """Load settings, run one extraction, and return a process exit code.
+
+    Configuration and window errors are logged and become exit code ``1``.
+    Any other unexpected exception is logged with a traceback and also
+    returns ``1``. Expected extraction failures stay inside
+    :class:`ExtractResult` and use :func:`exit_code`.
+
+    Returns:
+        ``0`` on success or a lock-busy skip, ``1`` on failure.
+    """
     configure_logging()
     try:
         settings = Settings.from_env()

@@ -36,7 +36,11 @@ class NormalizedRow:
 
     @property
     def grain(self) -> tuple[date, str, str]:
-        """Return the reporting grain ``(report_date, country, channel)``."""
+        """Return the reporting grain.
+
+        Returns:
+            ``(report_date, country, channel)``.
+        """
         return (self.report_date, self.country, self.channel)
 
 

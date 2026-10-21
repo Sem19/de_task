@@ -36,6 +36,15 @@ LATER = EXTRACTED_AT + timedelta(minutes=15)
 
 
 def _count_rows(conn, *, report_date: date | None = None) -> int:
+    """Count test ``partner_report`` rows, optionally for one date.
+
+    Args:
+        conn: Open connection.
+        report_date: When set, count only that reporting date.
+
+    Returns:
+        The matching row count.
+    """
     table = sql.Identifier(TEST_SCHEMA, "partner_report")
     if report_date is None:
         row = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(table)).fetchone()
@@ -50,6 +59,8 @@ def _count_rows(conn, *, report_date: date | None = None) -> int:
 
 @unittest.skipUnless(postgres_available(), "PostgreSQL is not available")
 class ExtractStateTest(unittest.TestCase):
+    """Checkpoint watermarks committed together with ``partner_report``."""
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.settings = settings_with_dsn(integration_dsn())
@@ -72,6 +83,11 @@ class ExtractStateTest(unittest.TestCase):
             conn.commit()
 
     def _commit(self, snapshot, extracted_at=EXTRACTED_AT):
+        """Apply ``snapshot`` and commit data with state.
+
+        Returns:
+            The load result and the checkpoint read back after commit.
+        """
         with connection(self.settings) as conn:
             load_result, _pending = apply_snapshot(
                 conn, snapshot, extracted_at=extracted_at, schema=TEST_SCHEMA
@@ -457,6 +473,8 @@ class ExtractStateTest(unittest.TestCase):
 
 @unittest.skipUnless(postgres_available(), "PostgreSQL is not available")
 class ExtractionLockTest(unittest.TestCase):
+    """A held session advisory lock blocks a second extractor."""
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.settings = settings_with_dsn(integration_dsn())

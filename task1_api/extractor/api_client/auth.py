@@ -37,7 +37,12 @@ def obtain_access_token(client: PartnerAPIClient) -> str:
 
 
 def invalidate_access_token(client: PartnerAPIClient) -> None:
-    """Drop the cached bearer token so the next fetch hits /oauth/token."""
+    """Drop the cached bearer token so the next call hits ``/oauth/token``.
+
+    Args:
+        client: Client whose token and expiry are cleared. Expiry is set
+            to ``0`` so a later freshness check cannot reuse it.
+    """
     client._access_token = None
     client._token_expires_at = 0.0
 
@@ -78,11 +83,31 @@ def fetch_account(client: PartnerAPIClient) -> Account:
 
 
 def _token_is_fresh(client: PartnerAPIClient) -> bool:
+    """Return whether the cached token is still inside the refresh margin.
+
+    Args:
+        client: Client holding the token and its monotonic expiry.
+
+    Returns:
+        ``True`` when monotonic time is earlier than expiry minus
+        ``token_refresh_margin_s``.
+    """
     refresh_at = client._token_expires_at - client._settings.token_refresh_margin_s
     return time.monotonic() < refresh_at
 
 
 def _fetch_token(client: PartnerAPIClient) -> str:
+    """Request a new bearer token and store it on ``client``.
+
+    Args:
+        client: HTTP client whose credentials are posted to ``/oauth/token``.
+
+    Returns:
+        The issued access token.
+
+    Raises:
+        PartnerAPIError: If the request fails or the body is invalid.
+    """
     logger.info("POST %s", OAUTH_TOKEN_PATH)
     response = client._send(
         "POST",
@@ -105,6 +130,19 @@ def _parse_token(
     client: PartnerAPIClient,
     response: httpx.Response,
 ) -> tuple[str, int]:
+    """Read ``access_token`` and ``expires_in`` from a token response.
+
+    Args:
+        client: Client used to decode the JSON object.
+        response: Successful ``POST /oauth/token`` response.
+
+    Returns:
+        The token string and its lifetime in seconds.
+
+    Raises:
+        PartnerAPIError: If either field is missing or the wrong type.
+            ``expires_in`` must be an ``int``, not a ``bool``.
+    """
     body = client._json_object(response, OAUTH_TOKEN_PATH)
     token = body.get("access_token")
     expires_in = body.get("expires_in")
@@ -122,6 +160,18 @@ def _parse_token(
 
 
 def _parse_account(client: PartnerAPIClient, response: httpx.Response) -> Account:
+    """Build an :class:`Account` from ``GET /v2/account``.
+
+    Args:
+        client: Client used to decode the JSON object.
+        response: Successful account response.
+
+    Returns:
+        Currency, timezone, and attribution window.
+
+    Raises:
+        PartnerAPIError: If a required field is missing or invalid.
+    """
     body = client._json_object(response, ACCOUNT_PATH)
     try:
         account_id = body["account_id"]

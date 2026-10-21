@@ -30,6 +30,19 @@ def _state(
     last_date_from: date | None = None,
     last_date_to: date | None = None,
 ) -> ExtractState:
+    """Build a checkpoint with EUR and the mock timezone filled in.
+
+    Args:
+        settled_through: Inclusive immutable watermark. ``None`` if unset.
+        loaded_through: Inclusive loaded watermark. Defaults to
+            ``settled_through``, or today when that is also unset.
+        loaded_from: Inclusive coverage start. Defaults to the last window start.
+        last_date_from: Last snapshot start. Defaults to the loaded end.
+        last_date_to: Last snapshot end. Defaults to the loaded end.
+
+    Returns:
+        A frozen :class:`ExtractState`.
+    """
     loaded = loaded_through if loaded_through is not None else settled_through
     if loaded is None:
         loaded = TODAY
@@ -52,6 +65,12 @@ def _state(
 
 
 def _assert_gap_free(test: unittest.TestCase, windows) -> None:
+    """Assert windows are non-empty, within seven days, and abut.
+
+    Args:
+        test: Case used for assertions.
+        windows: Oldest-first plan.
+    """
     test.assertGreater(len(windows), 0)
     for window in windows:
         test.assertLessEqual(window.inclusive_days, REPORT_MAX_SPAN_DAYS + 1)
@@ -64,6 +83,8 @@ def _assert_gap_free(test: unittest.TestCase, windows) -> None:
 
 
 class AccountTodayTest(unittest.TestCase):
+    """Fixed UTC−7 reporting date, not IANA America/Los_Angeles."""
+
     def test_fixed_utc_minus_seven_not_iana_los_angeles(self) -> None:
         self.assertEqual(account_today(NOW), TODAY)
 
@@ -84,6 +105,8 @@ class AccountTodayTest(unittest.TestCase):
 
 
 class ExtractStartDateTest(unittest.TestCase):
+    """Parsing of ``EXTRACT_START_DATE``."""
+
     def test_blank_is_unset(self) -> None:
         self.assertIsNone(parse_extract_start_date(None))
         self.assertIsNone(parse_extract_start_date(""))
@@ -105,6 +128,8 @@ class ExtractStartDateTest(unittest.TestCase):
 
 
 class PlanExtractWindowsTest(unittest.TestCase):
+    """Gap-free window plans from checkpoints and backfill floors."""
+
     def test_initial_seven_day_window(self) -> None:
         windows = plan_extract_windows(now_utc=NOW)
         self.assertEqual(len(windows), 1)

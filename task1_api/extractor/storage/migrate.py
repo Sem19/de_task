@@ -53,6 +53,18 @@ def apply_migrations(
 
 
 def _reporting_timezone_pending(conn: psycopg.Connection, schema: str) -> bool:
+    """Return whether ``partner_report.reporting_timezone`` still needs DDL.
+
+    A missing table is not pending; ``verify_schema`` rejects that later.
+    A missing column, a nullable column, or a leftover default is pending.
+
+    Args:
+        conn: Open PostgreSQL connection.
+        schema: Warehouse schema.
+
+    Returns:
+        ``True`` when the column must be added or tightened.
+    """
     columns = table_columns(conn, "partner_report", schema=schema)
     if not columns:
         return False
@@ -69,6 +81,15 @@ def _reporting_timezone_pending(conn: psycopg.Connection, schema: str) -> bool:
 
 
 def _add_reporting_timezone(conn: psycopg.Connection, schema: str) -> None:
+    """Add ``reporting_timezone``, backfill it, and drop the default.
+
+    Existing nulls are set to ``MOCK_ACCOUNT_TIMEZONE``. The statements are
+    not committed here.
+
+    Args:
+        conn: Open PostgreSQL connection.
+        schema: Warehouse schema.
+    """
     table = sql.Identifier(schema, "partner_report")
     conn.execute(
         sql.SQL(

@@ -169,6 +169,27 @@ def _run_locked(
     schema: str,
     progress: dict[str, int],
 ) -> ExtractResult:
+    """Migrate, verify the schema, and commit every planned window.
+
+    The caller already holds the advisory lock. The API client is closed
+    before this function returns, including when a later step fails.
+
+    Args:
+        settings: API and warehouse settings.
+        run_id: Short id included in logs.
+        now_utc: Clock instant for ``account_today``.
+        extract_start_date: Planner baseline or backfill floor. May be
+            ``None``.
+        client: Optional API client. Created when omitted.
+        connection_cm: Load-connection context manager.
+        migrate: Warehouse DDL that must not share the loader transaction.
+        schema: Warehouse schema.
+        progress: Mutable ``planned`` and ``committed`` counts. Updated in
+            place so a failure can still report them.
+
+    Returns:
+        A success result. Expected extraction errors propagate to the caller.
+    """
     migrate(settings)
     api = client or PartnerAPIClient(settings)
     try:
@@ -215,6 +236,23 @@ def _process_chunk(
     run_id: str,
     schema: str,
 ) -> None:
+    """Fetch, validate, and commit one window.
+
+    Args:
+        client: Authenticated API client.
+        conn: Open load connection. The commit happens in this function.
+        account: Account metadata used by validation.
+        window: Inclusive date chunk and its kind.
+        run_id: Short id included in logs.
+        schema: Warehouse schema.
+
+    Raises:
+        PartnerAPIError: If the report cannot be fetched.
+        ReportValidationError: If the snapshot fails an integrity check.
+        RowValidationError: If a row fails normalization.
+        StateConflictError: If currency or timezone changed.
+        StorageError: If the slice replace or checkpoint write fails.
+    """
     logger.info(
         "Processing chunk run_id=%s kind=%s window=%s..%s",
         run_id,
@@ -236,6 +274,21 @@ def _process_chunk(
 def _fetch_validated(
     client: PartnerAPIClient, account: Any, window: ReportWindow
 ) -> ValidatedReport:
+    """Submit one window, download it, and validate the snapshot.
+
+    Args:
+        client: Authenticated API client.
+        account: Account metadata used by validation.
+        window: Inclusive date chunk.
+
+    Returns:
+        The normalized snapshot. Nothing is written to PostgreSQL.
+
+    Raises:
+        PartnerAPIError: If submit, poll, or download fails.
+        ReportValidationError: If the snapshot is incomplete or inconsistent.
+        RowValidationError: If any row fails normalization.
+    """
     date_from = window.date_from.isoformat()
     date_to = window.date_to.isoformat()
     done, rows = _complete_report(
@@ -258,6 +311,25 @@ def _complete_report(
     *,
     resubmits_left: int,
 ) -> tuple[Report, ReportRows]:
+    """Submit a report and return it once its rows have been downloaded.
+
+    One bounded resubmit covers a ``GET`` 404 after the mock restarts and
+    forgets the job id. A later missing job propagates.
+
+    Args:
+        client: Authenticated API client.
+        date_from: Inclusive start, ``YYYY-MM-DD``.
+        date_to: Inclusive end, ``YYYY-MM-DD``.
+        resubmits_left: Extra submits still allowed after
+            :class:`ReportNotFoundError`.
+
+    Returns:
+        The ``DONE`` report and its downloaded rows.
+
+    Raises:
+        ReportNotFoundError: If the job is missing and no resubmits remain.
+        PartnerAPIError: If submit, poll, or download fails for another reason.
+    """
     submitted = client.submit_report(date_from, date_to)
     logger.info(
         "Submitted report_id=%s window=%s..%s",
@@ -290,6 +362,25 @@ def _commit_snapshot(
     kind: str,
     schema: str,
 ) -> tuple[LoadResult, ExtractState]:
+    """Write the slice and checkpoint, then commit both.
+
+    Any exception rolls the connection back and is re-raised, so a failed
+    chunk leaves ``partner_report`` and ``extract_state`` unchanged.
+
+    Args:
+        conn: Open load connection. Must not autocommit.
+        snapshot: Integrity-checked report.
+        run_id: Short id included in the commit log.
+        kind: Window kind, ``incremental`` or ``backfill``.
+        schema: Warehouse schema.
+
+    Returns:
+        Load counts and the checkpoint that was committed.
+
+    Raises:
+        StateConflictError: If currency or timezone changed.
+        StorageError: If the replace or checkpoint write fails.
+    """
     extracted_at = datetime.now(timezone.utc)
     try:
         load_result, pending = apply_snapshot(
@@ -322,6 +413,12 @@ def _commit_snapshot(
 
 
 def _log_finished(result: ExtractResult, started: float) -> None:
+    """Log the run status and elapsed time.
+
+    Args:
+        result: Outcome already decided by the caller.
+        started: ``time.monotonic`` value captured when the run began.
+    """
     logger.info(
         "Extractor finished run_id=%s result=%s duration_s=%.3f "
         "chunks_committed=%s chunks_planned=%s",
