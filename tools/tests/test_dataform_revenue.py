@@ -63,6 +63,10 @@ def _sqlx_files() -> list[Path]:
     return sorted((_DATAFORM / "definitions").rglob("*.sqlx"))
 
 
+def _table_sqlx_files() -> list[Path]:
+    return [path for path in _sqlx_files() if path.parent.name != "assertions"]
+
+
 def _config(text: str) -> dict[str, str]:
     body = _CONFIG.search(text)
     assert body is not None
@@ -100,11 +104,11 @@ def test_slice_has_three_declarations_and_six_tables() -> None:
     schemas = re.findall(r'schema:\s*"([^"]+)"', declaration)
     assert names == ["payments", "subscriptions", "fx_rates"]
     assert schemas == ["raw", "raw", "raw"]
-    assert sorted(path.stem for path in _sqlx_files()) == sorted(_TABLES)
+    assert sorted(path.stem for path in _table_sqlx_files()) == sorted(_TABLES)
 
 
 def test_each_model_is_a_tagged_table_with_the_planned_refs() -> None:
-    for path in _sqlx_files():
+    for path in _table_sqlx_files():
         text = path.read_text()
         config = _config(text)
         schema, _source, refs = _TABLES[path.stem]

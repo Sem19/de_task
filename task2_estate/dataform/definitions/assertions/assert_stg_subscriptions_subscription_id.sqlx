@@ -1,0 +1,14 @@
+config {
+  type: "assertion",
+  schema: "dataform_assertions",
+  name: "assert_stg_subscriptions_subscription_id",
+  tags: ["revenue_daily"]
+}
+
+-- Fails when subscription_id is repeated. Does not choose which source row won.
+SELECT
+  subscription_id,
+  COUNT(*) AS row_count
+FROM ${ref("stg_subscriptions")}
+GROUP BY subscription_id
+HAVING COUNT(*) > 1

@@ -1,0 +1,15 @@
+config {
+  type: "assertion",
+  schema: "dataform_assertions",
+  name: "assert_stg_fx_daily_rate_date_currency",
+  tags: ["revenue_daily"]
+}
+
+-- Fails when (rate_date, currency) is repeated. Null rates are allowed.
+SELECT
+  rate_date,
+  currency,
+  COUNT(*) AS row_count
+FROM ${ref("stg_fx_daily")}
+GROUP BY rate_date, currency
+HAVING COUNT(*) > 1

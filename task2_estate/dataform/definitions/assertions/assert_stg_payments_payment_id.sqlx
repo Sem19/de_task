@@ -1,0 +1,14 @@
+config {
+  type: "assertion",
+  schema: "dataform_assertions",
+  name: "assert_stg_payments_payment_id",
+  tags: ["revenue_daily"]
+}
+
+-- Fails when payment_id is repeated. One all-null group is still one key.
+SELECT
+  payment_id,
+  COUNT(*) AS row_count
+FROM ${ref("stg_payments")}
+GROUP BY payment_id
+HAVING COUNT(*) > 1

@@ -1,0 +1,23 @@
+config {
+  type: "assertion",
+  schema: "dataform_assertions",
+  name: "assert_revenue_daily_grain",
+  tags: ["revenue_daily"]
+}
+
+-- Fails when the sq_0104 grain is repeated. A null dimension is part of the key.
+SELECT
+  payment_date,
+  country_code,
+  region,
+  tier,
+  billing_period_days,
+  COUNT(*) AS row_count
+FROM ${ref("revenue_daily")}
+GROUP BY
+  payment_date,
+  country_code,
+  region,
+  tier,
+  billing_period_days
+HAVING COUNT(*) > 1
