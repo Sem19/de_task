@@ -20,6 +20,10 @@ REPORT_MAX_SPAN_DAYS = 6
 REPORT_POLL_INTERVAL_S = 1.0
 REPORT_POLL_TIMEOUT_S = 60.0
 
+# The mock silently caps page size at 1000; requesting 5000 would skip rows.
+REPORT_PAGE_LIMIT = 1000
+REPORT_ORDER_BY = "date,country,channel"
+
 REPORT_DIMENSIONS = ("date", "country", "channel")
 REPORT_METRICS = (
     "impressions",
@@ -41,6 +45,11 @@ REPORT_STATUSES_FAILED = frozenset({"FAILED", "ERROR", "CANCELLED"})
 def report_status_path(report_id: str) -> str:
     """Return ``GET /v2/reports/{report_id}``."""
     return f"{REPORTS_PATH}/{report_id}"
+
+
+def report_rows_path(report_id: str) -> str:
+    """Return ``GET /v2/reports/{report_id}/rows``."""
+    return f"{REPORTS_PATH}/{report_id}/rows"
 
 
 class ConfigError(Exception):
