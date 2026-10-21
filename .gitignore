@@ -1,0 +1,4 @@
+# The analytics repo's root .gitignore excludes *.json wholesale. Two of the
+# assignment's data files are JSON and must survive into the candidate's copy.
+!task2_estate/transfer_configs.json
+!task2_estate/schemas.json

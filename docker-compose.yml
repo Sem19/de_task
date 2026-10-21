@@ -1,0 +1,58 @@
+# One stack for all three tasks.
+#   lab        — where you analyse the estate and compile Dataform (task 2)
+#   mock-api   — the partner API sandbox (task 1)
+#   warehouse  — Postgres, the landing zone for task 1
+#   extractor  — your code (task 1)
+services:
+  lab:
+    build: ./docker
+    image: de-takehome-lab
+    working_dir: /work
+    volumes:
+      - .:/work
+    command: sleep infinity
+
+  mock-api:
+    build: ./task1_api
+    ports:
+      - "8080:8080"
+    environment:
+      # These are the realistic settings. Turn them down only to debug, and say so.
+      MOCK_TOKEN_TTL_S: "300"
+      MOCK_RATE_LIMIT: "60"
+      MOCK_MAX_JOBS: "2"
+      MOCK_JOB_RUNTIME_S: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8080/healthz')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  warehouse:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: acme
+      POSTGRES_PASSWORD: acme
+      POSTGRES_DB: acme
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./task1_api/warehouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acme"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  extractor:
+    build: ./task1_api/extractor
+    depends_on:
+      mock-api: { condition: service_healthy }
+      warehouse: { condition: service_healthy }
+    environment:
+      API_BASE: http://mock-api:8080
+      API_CLIENT_ID: acme-de-takehome
+      API_CLIENT_SECRET: s3cr3t-do-not-commit
+      PG_DSN: postgresql://acme:acme@warehouse:5432/acme
+    volumes:
+      - ./task1_api/extractor:/app

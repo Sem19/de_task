@@ -1,0 +1,218 @@
+openapi: 3.0.3
+info:
+  title: Partner Traffic & Revenue API
+  version: "2.4"
+  description: |
+    Programmatic access to traffic and revenue reporting for your partner account.
+
+    **Reporting model.** Reports are asynchronous. You submit a report request, poll
+    it until it completes, then page through the rows. A completed report is a
+    snapshot: **once a report reaches status `DONE`, its rows are final and will not
+    change.** Reports return all rows matching the request.
+
+    **Time zone.** All dates and hours in requests and responses are **UTC**.
+
+    **Currency.** Monetary metrics (`spend`, `revenue`) are returned as decimal
+    numbers in **USD**.
+
+    **Rate limits.** 60 requests per minute per account. Exceeding the limit returns
+    `429` with a `Retry-After` header (seconds).
+servers:
+  - url: http://localhost:8080
+    description: sandbox
+
+paths:
+  /oauth/token:
+    post:
+      summary: Obtain an access token
+      description: |
+        Exchange your client credentials for a bearer token. Tokens are long-lived;
+        obtain one at the start of your job and reuse it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, client_secret]
+              properties:
+                client_id: { type: string }
+                client_secret: { type: string }
+                grant_type: { type: string, default: client_credentials }
+      responses:
+        "200":
+          description: A bearer token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, example: Bearer }
+                  expires_in: { type: integer, description: seconds }
+        "401": { description: invalid_client }
+
+  /v2/account:
+    get:
+      summary: Account metadata
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Account settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account_id: { type: string }
+                  timezone: { type: string }
+                  currency: { type: string }
+
+  /v2/dimensions:
+    get:
+      summary: Available dimensions and metrics
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: What you may request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dimensions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        description: { type: string }
+                  metrics:
+                    type: array
+                    items: { type: string }
+                  max_dimensions: { type: integer }
+
+  /v2/reports:
+    post:
+      summary: Submit a report request
+      security: [{ bearerAuth: [] }]
+      description: |
+        Submits an asynchronous report job and returns its id.
+
+        Constraints:
+
+        * at most **7 days** per report (`date_to - date_from <= 6`)
+        * at most **3 dimensions**
+        * `placement` cannot be combined with `hour` (different storage shards)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date_from, date_to]
+              properties:
+                date_from: { type: string, format: date }
+                date_to: { type: string, format: date }
+                dimensions:
+                  type: array
+                  items: { type: string }
+                  default: [date]
+                metrics:
+                  type: array
+                  items: { type: string }
+                  default: [impressions, clicks]
+      responses:
+        "200":
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report_id: { type: string }
+                  status: { type: string, enum: [PENDING] }
+        "400":
+          description: |
+            `bad_date`, `bad_range`, `range_too_wide`, `unknown_dimension`,
+            `unknown_metric`, `too_many_dimensions`, `incompatible_dimensions`
+        "429": { description: rate_limited }
+
+  /v2/reports/{report_id}:
+    get:
+      summary: Poll report status
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: report_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Current status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  report_id: { type: string }
+                  status: { type: string, enum: [PENDING, RUNNING, DONE] }
+                  row_count:
+                    type: integer
+                    description: total rows in the completed report
+        "404": { description: unknown_report }
+
+  /v2/reports/{report_id}/rows:
+    get:
+      summary: Read report rows
+      security: [{ bearerAuth: [] }]
+      description: |
+        Pages through a completed report. Pass the `next_cursor` from the previous
+        response to fetch the next page; omit `cursor` for the first page. Iterate
+        while `has_more` is `true`.
+
+        Rows come back in a stable order, so a cursor always resumes from the same
+        position.
+      parameters:
+        - { name: report_id, in: path, required: true, schema: { type: string } }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: opaque cursor from the previous response's `next_cursor`
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 100, maximum: 5000 }
+        - name: order_by
+          in: query
+          required: false
+          schema: { type: string }
+          description: optional comma-separated dimension list to sort by
+      responses:
+        "200":
+          description: A page of rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      description: |
+                        One object per row. Requested dimensions appear as strings;
+                        requested metrics as numbers. `spend` and `revenue` are
+                        decimal USD.
+                  total: { type: integer }
+                  has_more: { type: boolean }
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: pass as `cursor` on the next call; null on the last page
+        "404": { description: unknown_report }
+        "409": { description: not_ready — the report has not finished }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

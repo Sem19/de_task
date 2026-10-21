@@ -1,0 +1,9 @@
+defaultProject: acme-analytics-prod
+defaultLocation: EU
+defaultDataset: dataform
+defaultAssertionDataset: dataform_assertions
+dataformCoreVersion: 3.0.0
+
+# Dataform core is pinned above; there is no package.json and no `dataform install`
+# step. Add one only if you pull in an npm dependency — the lab image has no network
+# at run time, so prefer not to.

@@ -1,0 +1,458 @@
+{
+  "raw.events": [
+    {
+      "name": "event_id",
+      "type": "STRING"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "session_id",
+      "type": "STRING"
+    },
+    {
+      "name": "event_name",
+      "type": "STRING"
+    },
+    {
+      "name": "event_ts",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "page_url",
+      "type": "STRING"
+    },
+    {
+      "name": "referrer",
+      "type": "STRING"
+    },
+    {
+      "name": "utm_source",
+      "type": "STRING"
+    },
+    {
+      "name": "utm_medium",
+      "type": "STRING"
+    },
+    {
+      "name": "utm_campaign",
+      "type": "STRING"
+    },
+    {
+      "name": "country_code",
+      "type": "STRING"
+    },
+    {
+      "name": "device_type",
+      "type": "STRING"
+    },
+    {
+      "name": "platform_lang",
+      "type": "STRING"
+    },
+    {
+      "name": "app_version",
+      "type": "STRING"
+    },
+    {
+      "name": "properties",
+      "type": "STRING"
+    },
+    {
+      "name": "experiment",
+      "type": "STRING"
+    },
+    {
+      "name": "ingested_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.subscriptions": [
+    {
+      "name": "subscription_id",
+      "type": "STRING"
+    },
+    {
+      "name": "original_subscription_id",
+      "type": "STRING"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "plan_id",
+      "type": "STRING"
+    },
+    {
+      "name": "status",
+      "type": "STRING"
+    },
+    {
+      "name": "tier",
+      "type": "STRING"
+    },
+    {
+      "name": "price_minor",
+      "type": "INT64"
+    },
+    {
+      "name": "currency",
+      "type": "STRING"
+    },
+    {
+      "name": "billing_period_days",
+      "type": "INT64"
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "activated_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "cancelled_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "expires_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "upgraded_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "country_code",
+      "type": "STRING"
+    },
+    {
+      "name": "payment_processor",
+      "type": "STRING"
+    },
+    {
+      "name": "is_test",
+      "type": "BOOL"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "ingested_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.payments": [
+    {
+      "name": "payment_id",
+      "type": "STRING"
+    },
+    {
+      "name": "order_id",
+      "type": "STRING"
+    },
+    {
+      "name": "subscription_id",
+      "type": "STRING"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "amount_minor",
+      "type": "INT64"
+    },
+    {
+      "name": "currency",
+      "type": "STRING"
+    },
+    {
+      "name": "status",
+      "type": "STRING"
+    },
+    {
+      "name": "processor",
+      "type": "STRING"
+    },
+    {
+      "name": "attempt_no",
+      "type": "INT64"
+    },
+    {
+      "name": "is_rebill",
+      "type": "BOOL"
+    },
+    {
+      "name": "created_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "settled_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "refunded_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "ingested_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.users": [
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "registered_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "country_code",
+      "type": "STRING"
+    },
+    {
+      "name": "platform_lang",
+      "type": "STRING"
+    },
+    {
+      "name": "acquisition_source",
+      "type": "STRING"
+    },
+    {
+      "name": "email_hash",
+      "type": "STRING"
+    },
+    {
+      "name": "is_test",
+      "type": "BOOL"
+    },
+    {
+      "name": "updated_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.titles": [
+    {
+      "name": "title_id",
+      "type": "STRING"
+    },
+    {
+      "name": "title_slug",
+      "type": "STRING"
+    },
+    {
+      "name": "episodes_total",
+      "type": "INT64"
+    },
+    {
+      "name": "episodes_free",
+      "type": "INT64"
+    },
+    {
+      "name": "genre",
+      "type": "STRING"
+    },
+    {
+      "name": "released_at",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "is_active",
+      "type": "BOOL"
+    },
+    {
+      "name": "end",
+      "type": "STRING"
+    }
+  ],
+  "raw.reads": [
+    {
+      "name": "read_id",
+      "type": "STRING"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "title_id",
+      "type": "STRING"
+    },
+    {
+      "name": "episode_no",
+      "type": "INT64"
+    },
+    {
+      "name": "is_paid_episode",
+      "type": "BOOL"
+    },
+    {
+      "name": "read_ts",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "minutes",
+      "type": "FLOAT64"
+    },
+    {
+      "name": "device_type",
+      "type": "STRING"
+    },
+    {
+      "name": "ingested_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.ad_spend": [
+    {
+      "name": "spend_date",
+      "type": "DATE"
+    },
+    {
+      "name": "channel",
+      "type": "STRING"
+    },
+    {
+      "name": "campaign_id",
+      "type": "STRING"
+    },
+    {
+      "name": "campaign_name",
+      "type": "STRING"
+    },
+    {
+      "name": "adset_id",
+      "type": "STRING"
+    },
+    {
+      "name": "country_code",
+      "type": "STRING"
+    },
+    {
+      "name": "impressions",
+      "type": "INT64"
+    },
+    {
+      "name": "clicks",
+      "type": "INT64"
+    },
+    {
+      "name": "spend_minor",
+      "type": "INT64"
+    },
+    {
+      "name": "currency",
+      "type": "STRING"
+    },
+    {
+      "name": "platform",
+      "type": "STRING"
+    },
+    {
+      "name": "ingested_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.fx_rates": [
+    {
+      "name": "rate_date",
+      "type": "DATE"
+    },
+    {
+      "name": "currency",
+      "type": "STRING"
+    },
+    {
+      "name": "rate_to_usd",
+      "type": "FLOAT64"
+    }
+  ],
+  "raw.abtest_assignments": [
+    {
+      "name": "test_name",
+      "type": "STRING"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "variant",
+      "type": "STRING"
+    },
+    {
+      "name": "assigned_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.refund_rates": [
+    {
+      "name": "country_group",
+      "type": "STRING"
+    },
+    {
+      "name": "processing_rate",
+      "type": "FLOAT64"
+    },
+    {
+      "name": "refund_rate",
+      "type": "FLOAT64"
+    }
+  ],
+  "ml.legacy_user_map": [
+    {
+      "name": "legacy_user_id",
+      "type": "INT64"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "variant",
+      "type": "STRING"
+    },
+    {
+      "name": "mapped_at",
+      "type": "TIMESTAMP"
+    }
+  ],
+  "raw.plan_catalog": [
+    {
+      "name": "plan_id",
+      "type": "STRING"
+    },
+    {
+      "name": "plan_name",
+      "type": "STRING"
+    },
+    {
+      "name": "billing_period_days",
+      "type": "INT64"
+    },
+    {
+      "name": "tier",
+      "type": "STRING"
+    },
+    {
+      "name": "list_price_minor",
+      "type": "INT64"
+    },
+    {
+      "name": "currency",
+      "type": "STRING"
+    }
+  ]
+}
