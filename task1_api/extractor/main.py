@@ -1,50 +1,50 @@
-"""
-Partner report extractor — SKELETON.
+"""One-shot partner report extractor.
 
-What exists here: the container, the connection settings, and a place to put
-things. Everything that matters is a TODO.
-
-Run it with:  docker compose run --rm extractor
+Run with: docker compose run --rm extractor
 """
 
 from __future__ import annotations
 
+import logging
 import os
+import sys
 
-API_BASE = os.environ.get("API_BASE", "http://mock-api:8080")
-CLIENT_ID = os.environ["API_CLIENT_ID"]
-CLIENT_SECRET = os.environ["API_CLIENT_SECRET"]
-PG_DSN = os.environ.get("PG_DSN", "postgresql://acme:acme@warehouse:5432/acme")
+from config import ConfigError, Settings
+from pipeline import STATUS_FAILED, ExtractResult, run_extraction
+from window import WindowError
 
-DIMENSIONS = ["date", "country", "channel"]
-METRICS = ["impressions", "clicks", "installs", "signups", "payers", "spend", "revenue"]
-
-
-def get_token() -> str:
-    raise NotImplementedError
+logger = logging.getLogger(__name__)
 
 
-def submit_report(token: str, date_from: str, date_to: str) -> str:
-    raise NotImplementedError
+def configure_logging() -> None:
+    """Configure process-wide logging. Secrets are never added here."""
+    raw = os.environ.get("LOG_LEVEL", "INFO").strip().upper() or "INFO"
+    level = getattr(logging, raw, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
 
-def wait_for_report(token: str, report_id: str) -> dict:
-    raise NotImplementedError
+def exit_code(result: ExtractResult) -> int:
+    """Return 0 for success or skip, 1 for extraction failure."""
+    return 1 if result.status == STATUS_FAILED else 0
 
 
-def fetch_rows(token: str, report_id: str):
-    """Yield every row of a completed report."""
-    raise NotImplementedError
-
-
-def load(rows, meta: dict) -> None:
-    """Land rows in `partner_report`. Must be safe to call twice."""
-    raise NotImplementedError
-
-
-def main() -> None:
-    raise NotImplementedError
+def main() -> int:
+    """Load settings, run one extraction, and return a process exit code."""
+    configure_logging()
+    try:
+        settings = Settings.from_env()
+        result = run_extraction(settings)
+    except (ConfigError, WindowError) as exc:
+        logger.error("Extractor configuration failed: %s", exc)
+        return 1
+    except Exception:
+        logger.exception("Extractor crashed")
+        return 1
+    return exit_code(result)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

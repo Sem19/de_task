@@ -30,6 +30,8 @@ REPORT_MAX_SPAN_DAYS = 6
 DEFAULT_LOOKBACK_SPAN_DAYS = REPORT_MAX_SPAN_DAYS
 REPORT_POLL_INTERVAL_S = 1.0
 REPORT_POLL_TIMEOUT_S = 60.0
+# One extra submit if GET report 404s after a mock-server restart.
+REPORT_RESUBMIT_LIMIT = 1
 
 # The mock silently caps page size at 1000; requesting 5000 would skip rows.
 REPORT_PAGE_LIMIT = 1000
