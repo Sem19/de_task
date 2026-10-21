@@ -8,11 +8,39 @@ from typing import Mapping
 
 OAUTH_TOKEN_PATH = "/oauth/token"
 ACCOUNT_PATH = "/v2/account"
+REPORTS_PATH = "/v2/reports"
 
 DEFAULT_API_BASE = "http://mock-api:8080"
 GRANT_TYPE = "client_credentials"
 REQUEST_TIMEOUT_S = 30.0
 TOKEN_REFRESH_MARGIN_S = 30
+
+# Inclusive window is 7 days, i.e. date_to - date_from <= 6.
+REPORT_MAX_SPAN_DAYS = 6
+REPORT_POLL_INTERVAL_S = 1.0
+REPORT_POLL_TIMEOUT_S = 60.0
+
+REPORT_DIMENSIONS = ("date", "country", "channel")
+REPORT_METRICS = (
+    "impressions",
+    "clicks",
+    "installs",
+    "signups",
+    "payers",
+    "spend",
+    "revenue",
+)
+
+REPORT_STATUS_PENDING = "PENDING"
+REPORT_STATUS_RUNNING = "RUNNING"
+REPORT_STATUS_DONE = "DONE"
+REPORT_STATUSES_IN_PROGRESS = frozenset({REPORT_STATUS_PENDING, REPORT_STATUS_RUNNING})
+REPORT_STATUSES_FAILED = frozenset({"FAILED", "ERROR", "CANCELLED"})
+
+
+def report_status_path(report_id: str) -> str:
+    """Return ``GET /v2/reports/{report_id}``."""
+    return f"{REPORTS_PATH}/{report_id}"
 
 
 class ConfigError(Exception):
@@ -30,6 +58,8 @@ class Settings:
         request_timeout_s: httpx timeout applied to every request.
         token_refresh_margin_s: Refresh the bearer token this many seconds
             before ``expires_in`` elapses.
+        poll_interval_s: Delay between report status polls.
+        poll_timeout_s: Maximum time to wait for a report to reach ``DONE``.
     """
 
     api_base: str
@@ -37,6 +67,8 @@ class Settings:
     client_secret: str
     request_timeout_s: float = REQUEST_TIMEOUT_S
     token_refresh_margin_s: int = TOKEN_REFRESH_MARGIN_S
+    poll_interval_s: float = REPORT_POLL_INTERVAL_S
+    poll_timeout_s: float = REPORT_POLL_TIMEOUT_S
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
