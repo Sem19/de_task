@@ -1,7 +1,6 @@
 """Load and validate scheduled-query estate inputs.
 
-SQL parsing lives in ``sql``. The dependency graph is not part of this
-package.
+SQL parsing lives in ``sql``. The dependency graph lives in ``graph``.
 """
 
 from estate.errors import EstateInputError

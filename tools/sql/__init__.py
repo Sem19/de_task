@@ -1,7 +1,6 @@
 """Parse BigQuery scheduled-query SQL into table references.
 
-This package does not build the dependency graph. Callers relate reads to
-transfer-config destinations themselves.
+Destinations and the dependency graph are applied by ``graph``.
 """
 
 from sql.models import ParseIssue, SqlParse, TableRef, UnresolvedRef
