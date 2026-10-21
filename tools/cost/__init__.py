@@ -1,7 +1,7 @@
 """Estimate scheduled-query cost from recorded execution history.
 
-The public entry point is ``calculate_estate``. It does not write ``COST.txt``
-and it does not recommend optimizations.
+The public entry point is ``calculate_estate``. ``COST.txt`` is written by
+``cost_report``, which renders these estimates and does not replace them.
 """
 
 from cost.aggregate import calculate_estate, frequency_of

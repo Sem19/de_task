@@ -1,0 +1,809 @@
+COST
+Scheduled-query estate
+Source directory: task2_estate/
+Regenerate: python -m cost_report
+
+Figures are estimates from run_history.total_bytes_processed.
+They are not an invoice and they are not a forecast of future spend.
+Pricing from the cost engine: $6.25 per TiB (1099511627776 bytes). Minimum billed bytes
+  for a successful execution with a positive recorded byte count: 10000000. Failed
+  executions and successful zero-byte executions are estimated at zero. Display amounts
+  are rounded half-up from the unrounded estimates.
+
+1. Daily run-rate
+Queries: 129
+Configurations with a daily rate: 128
+Configurations with no observed runs: 1
+Configurations with missing cost evidence: 1
+Normalized daily scanned TiB: 227.7608 TiB
+Normalized daily estimated cost: $1423.51
+Historical estimated cost: $45737.93
+The estate daily rate is the sum of per-configuration rates. Each configuration uses its
+  own observed schedule dates. Historical cost is not divided by one shared window. A
+  configuration with no executions has no daily rate. That is not a recorded cost of
+  zero.
+
+2. Where the cost sits
+By schedule frequency:
+  daily: 97 configurations, 96 with a daily rate, 54.3344 TiB / day, $339.59 / day
+  hourly: 32 configurations, 32 with a daily rate, 173.4264 TiB / day, $1083.91 / day
+  other: 0 configurations, 0 with a daily rate, no daily rate
+By enabled state:
+  enabled: 128 configurations, 128 with a daily rate, 227.7608 TiB / day, $1423.51 / day
+  disabled: 1 configurations, 0 with a daily rate, no daily rate
+  unknown: 0 configurations, 0 with a daily rate, no daily rate
+
+3. Daily cost ranking
+Order is normalized daily cost descending, then config_id.
+  1. sq_3030 hourly marts.daily_rebuild_events_wide $611.6592 / day 97.8655 TiB 14
+  observed dates, span 14, contiguous True, 336 executions, 1 failed,
+  scheduled_queries/sq_3030__marts__daily_rebuild_events_wide.sql
+  2. sq_3007 hourly marts.events_hourly_unpart $144.9608 / day 23.1937 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 6 failed,
+  scheduled_queries/sq_3007__marts__events_hourly_unpart.sql
+  3. sq_3025 hourly staging.stg_events_hourly $77.9371 / day 12.4699 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3025__staging__stg_events_hourly.sql
+  4. sq_3011 hourly marts.payment_attempts_unpart $64.0639 / day 10.2502 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3011__marts__payment_attempts_unpart.sql
+  5. sq_3014 hourly marts.funnel_hourly_core $26.7254 / day 4.2761 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3014__marts__funnel_hourly_core.sql
+  6. sq_1026 daily reports.events_daily_wide $26.2245 / day 4.1959 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1026__reports__events_daily_wide.sql
+  7. sq_3015 hourly marts.funnel_hourly_lang $25.8842 / day 4.1415 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3015__marts__funnel_hourly_lang.sql
+  8. sq_3016 hourly marts.funnel_hourly_utm $25.0878 / day 4.0140 TiB 14 observed dates,
+  span 14, contiguous True, 336 executions, 5 failed,
+  scheduled_queries/sq_3016__marts__funnel_hourly_utm.sql
+  9. sq_1014 daily reports.channel_report_qtd $19.6178 / day 3.1389 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1014__reports__channel_report_qtd.sql
+  10. sq_1010 daily reports.reads_daily_full $18.2155 / day 2.9145 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1010__reports__reads_daily_full.sql
+  11. sq_5010 daily marts.legacy_retention_deck $16.2244 / day 2.5959 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5010__marts__legacy_retention_deck.sql
+  12. sq_1016 daily reports.cohort_retention_90d $16.1394 / day 2.5823 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1016__reports__cohort_retention_90d.sql
+  13. sq_3018 hourly marts.events_app_raw_hourly $13.4266 / day 2.1483 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3018__marts__events_app_raw_hourly.sql
+  14. sq_4016 daily ml.reads_features_90d $13.3908 / day 2.1425 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4016__ml__reads_features_90d.sql
+  15. sq_3019 hourly marts.events_search_raw_hourly $12.7418 / day 2.0387 TiB 14
+  observed dates, span 14, contiguous True, 336 executions, 0 failed,
+  scheduled_queries/sq_3019__marts__events_search_raw_hourly.sql
+  16. sq_1019 daily reports.surface_overlap_monthly $11.8922 / day 1.9028 TiB 90
+  observed dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1019__reports__surface_overlap_monthly.sql
+  17. sq_4023 daily ml.retention_ml $10.7839 / day 1.7254 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 3 failed,
+  scheduled_queries/sq_4023__ml__retention_ml.sql
+  18. sq_4024 daily ml.funnel_ml_features $9.8163 / day 1.5706 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4024__ml__funnel_ml_features.sql
+  19. sq_5008 daily marts.legacy_country_deck $9.6424 / day 1.5428 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5008__marts__legacy_country_deck.sql
+  20. sq_3024 hourly marts.revenue_intraday_usd $9.6395 / day 1.5423 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 1 failed,
+  scheduled_queries/sq_3024__marts__revenue_intraday_usd.sql
+  21. sq_3023 hourly marts.revenue_intraday_eur $9.6269 / day 1.5403 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3023__marts__revenue_intraday_eur.sql
+  22. sq_1015 daily reports.cohort_retention_reads $8.7164 / day 1.3946 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1015__reports__cohort_retention_reads.sql
+  23. sq_4018 daily ml.cohort_matrix_ml_tier $7.1858 / day 1.1497 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4018__ml__cohort_matrix_ml_tier.sql
+  24. sq_4017 daily ml.cohort_matrix_ml $7.0462 / day 1.1274 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4017__ml__cohort_matrix_ml.sql
+  25. sq_1020 daily reports.cohort_activity_matrix $6.8959 / day 1.1033 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1020__reports__cohort_activity_matrix.sql
+  26. sq_3027 hourly staging.stg_reads_hourly $6.5867 / day 1.0539 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3027__staging__stg_reads_hourly.sql
+  27. sq_4022 daily ml.engagement_overlap $6.1909 / day 0.9905 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4022__ml__engagement_overlap.sql
+  28. sq_3021 hourly marts.reads_hourly_device $6.0050 / day 0.9608 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3021__marts__reads_hourly_device.sql
+  29. sq_3020 hourly marts.reads_hourly_genre $5.9298 / day 0.9488 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3020__marts__reads_hourly_genre.sql
+  30. sq_1012 daily reports.channel_report_weekly $5.6795 / day 0.9087 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1012__reports__channel_report_weekly.sql
+  31. sq_5007 daily marts.legacy_weekly_deck $5.6263 / day 0.9002 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5007__marts__legacy_weekly_deck.sql
+  32. sq_0403 daily reports.funnel_current $5.5557 / day 0.8889 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0403__reports__funnel_current.sql
+  33. sq_0401 daily reports.funnel_2024 $5.5277 / day 0.8844 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0401__reports__funnel_2024.sql
+  34. sq_0402 daily reports.funnel_2025 $5.4790 / day 0.8766 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0402__reports__funnel_2025.sql
+  35. sq_4015 daily ml.reads_features_30d $4.9120 / day 0.7859 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_4015__ml__reads_features_30d.sql
+  36. sq_1009 daily reports.reads_daily_30d $4.8826 / day 0.7812 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1009__reports__reads_daily_30d.sql
+  37. sq_3026 hourly staging.stg_payments_hourly $4.4535 / day 0.7126 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3026__staging__stg_payments_hourly.sql
+  38. sq_0110 daily reports.ltv_by_cohort_v2 $4.0790 / day 0.6526 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0110__reports__ltv_by_cohort_v2.sql
+  39. sq_5011 daily marts.legacy_ltv_deck $4.0328 / day 0.6452 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5011__marts__legacy_ltv_deck.sql
+  40. sq_1021 daily reports.events_checkout_raw $3.9924 / day 0.6388 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1021__reports__events_checkout_raw.sql
+  41. sq_0109 daily reports.ltv_by_cohort $3.9851 / day 0.6376 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_0109__reports__ltv_by_cohort.sql
+  42. sq_1022 daily reports.events_payment_raw $3.9445 / day 0.6311 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1022__reports__events_payment_raw.sql
+  43. sq_3003 hourly marts.events_hourly_device $3.8611 / day 0.6178 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 6 failed,
+  scheduled_queries/sq_3003__marts__events_hourly_device.sql
+  44. sq_1018 daily reports.surface_overlap_daily $3.8497 / day 0.6159 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1018__reports__surface_overlap_daily.sql
+  45. sq_3017 hourly marts.funnel_hourly_country $3.6832 / day 0.5893 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 6 failed,
+  scheduled_queries/sq_3017__marts__funnel_hourly_country.sql
+  46. sq_4012 daily ml.ltv_pred_inputs_v2 $3.6578 / day 0.5853 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4012__ml__ltv_pred_inputs_v2.sql
+  47. sq_1027 daily reports.ltv_by_country $3.6325 / day 0.5812 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1027__reports__ltv_by_country.sql
+  48. sq_4013 daily ml.ltv_pred_inputs_v3 $3.5947 / day 0.5751 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4013__ml__ltv_pred_inputs_v3.sql
+  49. sq_4011 daily ml.ltv_pred_inputs $3.5924 / day 0.5748 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4011__ml__ltv_pred_inputs.sql
+  50. sq_1025 daily reports.funnel_daily_country $3.2903 / day 0.5264 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1025__reports__funnel_daily_country.sql
+  51. sq_3005 hourly marts.events_hourly_utm $3.2752 / day 0.5240 TiB 14 observed dates,
+  span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3005__marts__events_hourly_utm.sql
+  52. sq_1001 daily reports.funnel_daily_core $3.2624 / day 0.5220 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1001__reports__funnel_daily_core.sql
+  53. sq_5004 daily marts.region_rollup_new $3.2292 / day 0.5167 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5004__marts__region_rollup_new.sql
+  54. sq_1004 daily reports.funnel_daily_campaign $3.1998 / day 0.5120 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1004__reports__funnel_daily_campaign.sql
+  55. sq_1003 daily reports.funnel_daily_utm $3.1315 / day 0.5010 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1003__reports__funnel_daily_utm.sql
+  56. sq_1002 daily reports.funnel_daily_lang $3.1207 / day 0.4993 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1002__reports__funnel_daily_lang.sql
+  57. sq_1006 daily reports.funnel_daily_experiment $3.0806 / day 0.4929 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1006__reports__funnel_daily_experiment.sql
+  58. sq_1005 daily reports.funnel_daily_referrer $3.0557 / day 0.4889 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1005__reports__funnel_daily_referrer.sql
+  59. sq_3009 hourly marts.payment_attempts_by_proc $2.9745 / day 0.4759 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3009__marts__payment_attempts_by_proc.sql
+  60. sq_3022 hourly marts.subs_snapshot_hourly $2.6892 / day 0.4303 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3022__marts__subs_snapshot_hourly.sql
+  61. sq_3029 hourly marts.plan_mix_hourly $2.6658 / day 0.4265 TiB 14 observed dates,
+  span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3029__marts__plan_mix_hourly.sql
+  62. sq_1017 daily reports.title_performance $2.6448 / day 0.4232 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1017__reports__title_performance.sql
+  63. sq_5009 daily marts.legacy_title_deck $2.6297 / day 0.4207 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5009__marts__legacy_title_deck.sql
+  64. sq_0301 daily ml.user_daily $2.6000 / day 0.4160 TiB 90 observed dates, span 90,
+  contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0301__ml__user_daily.sql
+  65. sq_1011 daily reports.channel_report_daily $2.1495 / day 0.3439 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1011__reports__channel_report_daily.sql
+  66. sq_1013 daily reports.channel_report_country $2.1238 / day 0.3398 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1013__reports__channel_report_country.sql
+  67. sq_3006 hourly marts.events_hourly_exp $2.0950 / day 0.3352 TiB 14 observed dates,
+  span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3006__marts__events_hourly_exp.sql
+  68. sq_3001 hourly marts.events_hourly_core $2.0891 / day 0.3343 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 2 failed,
+  scheduled_queries/sq_3001__marts__events_hourly_core.sql
+  69. sq_4010 daily ml.abtest_revenue_join_90d $2.0755 / day 0.3321 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4010__ml__abtest_revenue_join_90d.sql
+  70. sq_3002 hourly marts.events_hourly_country $2.0693 / day 0.3311 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3002__marts__events_hourly_country.sql
+  71. sq_3004 hourly marts.events_hourly_lang $2.0622 / day 0.3300 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 7 failed,
+  scheduled_queries/sq_3004__marts__events_hourly_lang.sql
+  72. sq_0101 daily staging.stg_payments $1.9097 / day 0.3056 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0101__staging__stg_payments.sql
+  73. sq_1008 daily reports.reads_daily_device $1.8816 / day 0.3011 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1008__reports__reads_daily_device.sql
+  74. sq_4014 daily ml.reads_features_7d $1.8347 / day 0.2936 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4014__ml__reads_features_7d.sql
+  75. sq_3028 hourly staging.stg_users_hourly $1.7800 / day 0.2848 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3028__staging__stg_users_hourly.sql
+  76. sq_0105 hourly reports.revenue_daily $1.7748 / day 0.2840 TiB 14 observed dates,
+  span 14, contiguous True, 336 executions, 5 failed,
+  scheduled_queries/sq_0105__reports__revenue_daily.sql
+  77. sq_0114 hourly reports.payment_settle_hourly $1.6615 / day 0.2658 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 0 failed,
+  scheduled_queries/sq_0114__reports__payment_settle_hourly.sql
+  78. sq_1007 daily reports.reads_daily_genre $1.6431 / day 0.2629 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1007__reports__reads_daily_genre.sql
+  79. sq_3012 hourly marts.revenue_hourly_topup $1.6385 / day 0.2622 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 3 failed,
+  scheduled_queries/sq_3012__marts__revenue_hourly_topup.sql
+  80. sq_0302 daily ml.user_features $1.6319 / day 0.2611 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0302__ml__user_features.sql
+  81. sq_3013 hourly marts.settle_rate_hourly $1.6316 / day 0.2611 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 4 failed,
+  scheduled_queries/sq_3013__marts__settle_rate_hourly.sql
+  82. sq_3010 hourly marts.payment_attempts_retry $1.6187 / day 0.2590 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 7 failed,
+  scheduled_queries/sq_3010__marts__payment_attempts_retry.sql
+  83. sq_3008 hourly marts.payment_attempts_hourly $1.6172 / day 0.2587 TiB 14 observed
+  dates, span 14, contiguous True, 336 executions, 6 failed,
+  scheduled_queries/sq_3008__marts__payment_attempts_hourly.sql
+  84. sq_1024 daily reports.reads_daily_paid $1.6042 / day 0.2567 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1024__reports__reads_daily_paid.sql
+  85. sq_4007 daily ml.abtest_cancel_flow $1.3061 / day 0.2090 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_4007__ml__abtest_cancel_flow.sql
+  86. sq_4008 daily ml.abtest_free_episodes $1.2861 / day 0.2058 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_4008__ml__abtest_free_episodes.sql
+  87. sq_4002 daily ml.abtest_paywall_position $1.2737 / day 0.2038 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_4002__ml__abtest_paywall_position.sql
+  88. sq_4005 daily ml.abtest_recs_carousel $1.2675 / day 0.2028 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4005__ml__abtest_recs_carousel.sql
+  89. sq_5012 daily marts.legacy_abtest_deck $1.2588 / day 0.2014 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5012__marts__legacy_abtest_deck.sql
+  90. sq_4001 daily ml.abtest_checkout_v3 $1.2466 / day 0.1995 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 5 failed,
+  scheduled_queries/sq_4001__ml__abtest_checkout_v3.sql
+  91. sq_4004 daily ml.abtest_price_anchor $1.2188 / day 0.1950 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4004__ml__abtest_price_anchor.sql
+  92. sq_4003 daily ml.abtest_onboarding_quiz $1.2169 / day 0.1947 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 3 failed,
+  scheduled_queries/sq_4003__ml__abtest_onboarding_quiz.sql
+  93. sq_0104 daily reports.revenue_daily $1.2009 / day 0.1921 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0104__reports__revenue_daily.sql
+  94. sq_4006 daily ml.abtest_email_cadence $1.1970 / day 0.1915 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 2 failed,
+  scheduled_queries/sq_4006__ml__abtest_email_cadence.sql
+  95. sq_5017 daily marts.exec_revenue_board_copy $1.1938 / day 0.1910 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5017__marts__exec_revenue_board_copy.sql
+  96. sq_0108 daily reports.revenue_daily_strict $1.1893 / day 0.1903 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0108__reports__revenue_daily_strict.sql
+  97. sq_5016 daily marts.exec_revenue_board $1.1873 / day 0.1900 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5016__marts__exec_revenue_board.sql
+  98. sq_0107 daily reports.revenue_daily_eur $1.1760 / day 0.1882 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0107__reports__revenue_daily_eur.sql
+  99. sq_4020 daily ml.winback_candidates $0.8087 / day 0.1294 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4020__ml__winback_candidates.sql
+  100. sq_0412 daily reports.funnel_by_device $0.7529 / day 0.1205 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0412__reports__funnel_by_device.sql
+  101. sq_0411 daily reports.funnel_all_years $0.7515 / day 0.1202 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0411__reports__funnel_all_years.sql
+  102. sq_0413 daily marts.funnel_wide $0.7494 / day 0.1199 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0413__marts__funnel_wide.sql
+  103. sq_4009 daily ml.abtest_revenue_join $0.7415 / day 0.1186 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4009__ml__abtest_revenue_join.sql
+  104. sq_0303 daily ml.user_segments $0.5595 / day 0.0895 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0303__ml__user_segments.sql
+  105. sq_0113 daily reports.users_no_subscription $0.4583 / day 0.0733 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0113__reports__users_no_subscription.sql
+  106. sq_4019 daily ml.churn_candidates $0.4322 / day 0.0691 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4019__ml__churn_candidates.sql
+  107. sq_1028 daily reports.users_no_sub_7d $0.3803 / day 0.0608 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1028__reports__users_no_sub_7d.sql
+  108. sq_0102 daily staging.stg_subscriptions $0.2987 / day 0.0478 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0102__staging__stg_subscriptions.sql
+  109. sq_0201 daily marketing.spend_daily $0.2483 / day 0.0397 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0201__marketing__spend_daily.sql
+  110. sq_5002 daily marts.funnel_unified $0.2475 / day 0.0396 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5002__marts__funnel_unified.sql
+  111. sq_0202 daily marketing.spend_enriched $0.2255 / day 0.0361 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0202__marketing__spend_enriched.sql
+  112. sq_5003 daily marts.ltv_unified $0.1864 / day 0.0298 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5003__marts__ltv_unified.sql
+  113. sq_0112 daily reports.kpi_snapshot $0.1855 / day 0.0297 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0112__reports__kpi_snapshot.sql
+  114. sq_5001 daily marts.revenue_unified $0.1570 / day 0.0251 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5001__marts__revenue_unified.sql
+  115. sq_0106 daily reports.revenue_by_region $0.1391 / day 0.0222 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0106__reports__revenue_by_region.sql
+  116. sq_5018 daily marts.dst_gap_daily_recon $0.1379 / day 0.0221 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5018__marts__dst_gap_daily_recon.sql
+  117. sq_5006 daily marts.subs_unified $0.1246 / day 0.0199 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5006__marts__subs_unified.sql
+  118. sq_0501 daily product.subscriber_snapshot $0.1135 / day 0.0182 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0501__product__subscriber_snapshot.sql
+  119. sq_1023 daily reports.subs_snapshot_tier $0.1130 / day 0.0181 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_1023__reports__subs_snapshot_tier.sql
+  120. sq_0503 daily ml.subscriber_snapshot $0.1128 / day 0.0180 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0503__ml__subscriber_snapshot.sql
+  121. sq_0502 daily reports.subscriber_snapshot $0.1122 / day 0.0179 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0502__reports__subscriber_snapshot.sql
+  122. sq_4021 daily ml.segment_mix_daily $0.1112 / day 0.0178 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 1 failed,
+  scheduled_queries/sq_4021__ml__segment_mix_daily.sql
+  123. sq_5005 daily marts.exec_kpi_v2 $0.0631 / day 0.0101 TiB 90 observed dates, span
+  90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_5005__marts__exec_kpi_v2.sql
+  124. sq_0111 daily reports.exec_kpi_daily $0.0504 / day 0.0081 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0111__reports__exec_kpi_daily.sql
+  125. sq_0103 daily staging.stg_fx_daily $0.0062 / day 0.0010 TiB 90 observed dates,
+  span 90, contiguous True, 90 executions, 0 failed,
+  scheduled_queries/sq_0103__staging__stg_fx_daily.sql
+  126. sq_5013 daily marts.app_version_adoption $0.0000 / day 0.0000 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 90 failed,
+  scheduled_queries/sq_5013__marts__app_version_adoption.sql
+  127. sq_5014 daily marts.partner_postback_recon $0.0000 / day 0.0000 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 90 failed,
+  scheduled_queries/sq_5014__marts__partner_postback_recon.sql
+  128. sq_5015 daily marts.session_quality_v1 $0.0000 / day 0.0000 TiB 90 observed
+  dates, span 90, contiguous True, 90 executions, 90 failed,
+  scheduled_queries/sq_5015__marts__session_quality_v1.sql
+  129. sq_5019 daily marts.paused_experiment_readout no observed runs unmeasured 0
+  observed dates, span None, contiguous None, 0 executions, 0 failed,
+  scheduled_queries/sq_5019__marts__paused_experiment_readout.sql
+
+4. Lineage route for revenue_daily
+The route is the scheduled-query ancestors of that exact table name, every writer of the
+  table, and scheduled-query descendants. Dashboard and ad-hoc consumers are excluded.
+  Queries that only share an upstream source are excluded.
+Queries on the route: 10
+Normalized daily scanned TiB: 0.9256 TiB
+Normalized daily estimated cost: $5.79
+Queries on the route with no daily rate: none
+  sq_0101 daily staging.stg_payments $1.9097 / day 0.3056 TiB
+  scheduled_queries/sq_0101__staging__stg_payments.sql
+  sq_0105 hourly reports.revenue_daily $1.7748 / day 0.2840 TiB
+  scheduled_queries/sq_0105__reports__revenue_daily.sql
+  sq_0104 daily reports.revenue_daily $1.2009 / day 0.1921 TiB
+  scheduled_queries/sq_0104__reports__revenue_daily.sql
+  sq_0102 daily staging.stg_subscriptions $0.2987 / day 0.0478 TiB
+  scheduled_queries/sq_0102__staging__stg_subscriptions.sql
+  sq_0112 daily reports.kpi_snapshot $0.1855 / day 0.0297 TiB
+  scheduled_queries/sq_0112__reports__kpi_snapshot.sql
+  sq_5001 daily marts.revenue_unified $0.1570 / day 0.0251 TiB
+  scheduled_queries/sq_5001__marts__revenue_unified.sql
+  sq_0106 daily reports.revenue_by_region $0.1391 / day 0.0222 TiB
+  scheduled_queries/sq_0106__reports__revenue_by_region.sql
+  sq_5005 daily marts.exec_kpi_v2 $0.0631 / day 0.0101 TiB
+  scheduled_queries/sq_5005__marts__exec_kpi_v2.sql
+  sq_0111 daily reports.exec_kpi_daily $0.0504 / day 0.0081 TiB
+  scheduled_queries/sq_0111__reports__exec_kpi_daily.sql
+  sq_0103 daily staging.stg_fx_daily $0.0062 / day 0.0010 TiB
+  scheduled_queries/sq_0103__staging__stg_fx_daily.sql
+Queries that share an upstream source and are outside the route: sq_3011, sq_1014,
+  sq_5010, sq_1016, sq_4023, sq_3023, sq_1015, sq_4018, sq_4017, sq_1020, sq_1012,
+  sq_5007, sq_3026, sq_0109, sq_4012, sq_1027, sq_4013, sq_4011, sq_3009, sq_3022,
+  sq_3029, sq_1011, sq_1013, sq_4010, sq_0114, sq_3012, sq_3013, sq_3010, sq_3008,
+  sq_4007, sq_4008, sq_4002, sq_4005, sq_5012, sq_4001, sq_4004, sq_4003, sq_4006,
+  sq_5017, sq_0108, sq_5016, sq_4020, sq_4009, sq_0113, sq_4019, sq_1028, sq_0202,
+  sq_5018, sq_0501, sq_1023, sq_0503, sq_0502, sq_4021, sq_5019. Their normalized daily
+  estimated cost, excluded from the route: $241.96.
+
+5. Savings scenarios
+Scenarios are not additive. One query can appear in more than one.
+Measured savings are observed daily rates of queries that would stop, with no
+  replacement scan. Assumed savings depend on a replacement or a schedule change that
+  was not executed.
+one-run-per-observed-day
+  Run each hourly query once per observed day
+  Kind: assumed. Change: business_logic.
+  Daily savings: $1038.75
+  Retained: none
+  Evidence: The saving for a query is its observed daily rate minus the average cost of
+  one recorded execution. The estate figure is the sum across 32 hourly queries that ran
+  more than once on an observed date.
+  Assumption: A single remaining execution would scan the same bytes as the average
+  recorded execution, not a full extra day of increments.
+  Uncertainty: Each omitted execution is assumed to scan the same bytes as the execution
+  that would remain. A single daily run of an incremental query can scan more than one
+  hourly run. That replacement scan was not measured. This is not a forecast of savings
+  from changing the schedule.
+    sq_3030 $586.1734 / day (336 executions on 14 observed dates;
+  marts.daily_rebuild_events_wide)
+    sq_3007 $138.9207 / day (336 executions on 14 observed dates;
+  marts.events_hourly_unpart)
+    sq_3025 $74.6898 / day (336 executions on 14 observed dates;
+  staging.stg_events_hourly)
+    sq_3011 $61.3945 / day (336 executions on 14 observed dates;
+  marts.payment_attempts_unpart)
+    sq_3014 $25.6118 / day (336 executions on 14 observed dates;
+  marts.funnel_hourly_core)
+    sq_3015 $24.8057 / day (336 executions on 14 observed dates;
+  marts.funnel_hourly_lang)
+    sq_3016 $24.0424 / day (336 executions on 14 observed dates;
+  marts.funnel_hourly_utm)
+    sq_3018 $12.8672 / day (336 executions on 14 observed dates;
+  marts.events_app_raw_hourly)
+    sq_3019 $12.2109 / day (336 executions on 14 observed dates;
+  marts.events_search_raw_hourly)
+    sq_3024 $9.2378 / day (336 executions on 14 observed dates;
+  marts.revenue_intraday_usd)
+    sq_3023 $9.2258 / day (336 executions on 14 observed dates;
+  marts.revenue_intraday_eur)
+    sq_3027 $6.3122 / day (336 executions on 14 observed dates;
+  staging.stg_reads_hourly)
+    sq_3021 $5.7548 / day (336 executions on 14 observed dates;
+  marts.reads_hourly_device)
+    sq_3020 $5.6827 / day (336 executions on 14 observed dates;
+  marts.reads_hourly_genre)
+    sq_3026 $4.2679 / day (336 executions on 14 observed dates;
+  staging.stg_payments_hourly)
+    sq_3003 $3.7002 / day (336 executions on 14 observed dates;
+  marts.events_hourly_device)
+    sq_3017 $3.5298 / day (336 executions on 14 observed dates;
+  marts.funnel_hourly_country)
+    sq_3005 $3.1387 / day (336 executions on 14 observed dates; marts.events_hourly_utm)
+    sq_3009 $2.8506 / day (336 executions on 14 observed dates;
+  marts.payment_attempts_by_proc)
+    sq_3022 $2.5772 / day (336 executions on 14 observed dates;
+  marts.subs_snapshot_hourly)
+    sq_3029 $2.5547 / day (336 executions on 14 observed dates; marts.plan_mix_hourly)
+    sq_3006 $2.0077 / day (336 executions on 14 observed dates; marts.events_hourly_exp)
+    sq_3001 $2.0021 / day (336 executions on 14 observed dates;
+  marts.events_hourly_core)
+    sq_3002 $1.9830 / day (336 executions on 14 observed dates;
+  marts.events_hourly_country)
+    sq_3004 $1.9763 / day (336 executions on 14 observed dates;
+  marts.events_hourly_lang)
+    sq_3028 $1.7058 / day (336 executions on 14 observed dates;
+  staging.stg_users_hourly)
+    sq_0105 $1.7008 / day (336 executions on 14 observed dates; reports.revenue_daily)
+    sq_0114 $1.5922 / day (336 executions on 14 observed dates;
+  reports.payment_settle_hourly)
+    sq_3012 $1.5702 / day (336 executions on 14 observed dates;
+  marts.revenue_hourly_topup)
+    sq_3013 $1.5636 / day (336 executions on 14 observed dates;
+  marts.settle_rate_hourly)
+    sq_3010 $1.5513 / day (336 executions on 14 observed dates;
+  marts.payment_attempts_retry)
+    sq_3008 $1.5498 / day (336 executions on 14 observed dates;
+  marts.payment_attempts_hourly)
+stop-no-recorded-consumer
+  Stop enabled queries with no recorded consumer
+  Kind: measured. Change: owner_confirmation.
+  Daily savings: $39.41
+  Retained: none
+  Evidence: Each destination has no graph read, certain or uncertain, and no
+  downstream_usage row. Queries: 6.
+  Assumption: Stopping the schedule removes its observed scan cost. No replacement query
+  is added.
+  Uncertainty: A usage extract can miss a reader. The amount is the observed daily rate
+  of the listed queries and assumes no replacement scan. Do not disable them from this
+  report alone, and do not delete the tables.
+    sq_5010 $16.2244 / day (daily marts.legacy_retention_deck)
+    sq_5008 $9.6424 / day (daily marts.legacy_country_deck)
+    sq_5007 $5.6263 / day (daily marts.legacy_weekly_deck)
+    sq_5011 $4.0328 / day (daily marts.legacy_ltv_deck)
+    sq_5009 $2.6297 / day (daily marts.legacy_title_deck)
+    sq_5012 $1.2588 / day (daily marts.legacy_abtest_deck)
+stop-repeated-sql-sq_1016-sq_5010
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Daily savings: $16.22
+  Retained: sq_1016
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_1016->reports.cohort_retention_90d, sq_5010->marts.legacy_retention_deck.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5010 $16.2244 / day (daily marts.legacy_retention_deck)
+stop-repeated-sql-sq_1012-sq_5007
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Daily savings: $5.63
+  Retained: sq_1012
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_1012->reports.channel_report_weekly, sq_5007->marts.legacy_weekly_deck.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5007 $5.6263 / day (daily marts.legacy_weekly_deck)
+stop-repeated-sql-sq_1017-sq_5009
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Daily savings: $2.63
+  Retained: sq_1017
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_1017->reports.title_performance, sq_5009->marts.legacy_title_deck.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5009 $2.6297 / day (daily marts.legacy_title_deck)
+stop-competing-writer-reports.revenue_daily
+  Keep one writer of reports.revenue_daily
+  Kind: assumed. Change: business_logic.
+  Daily savings: $1.77
+  Retained: sq_0104
+  Evidence: The graph records more than one writer of reports.revenue_daily. sq_0104
+  WRITE_TRUNCATE every day 03:10 -> reports.revenue_daily; sq_0105 WRITE_APPEND every 1
+  hours -> reports.revenue_daily.
+  Assumption: Consumers of the table can be served by the retained writer alone.
+  Uncertainty: The retained query is the lowest observed daily rate. config_id breaks
+  ties. The stopped query may project different columns, use a different write
+  disposition, or cover a different window. Whether the retained query can replace it
+  was not measured. Stopping a writer does not delete the table.
+    sq_0105 $1.7748 / day (hourly reports.revenue_daily)
+stop-repeated-sql-sq_0105-sq_0114
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Daily savings: $1.77
+  Retained: sq_0114
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_0105->reports.revenue_daily, sq_0114->reports.payment_settle_hourly.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_0105 $1.7748 / day (hourly reports.revenue_daily)
+stop-repeated-sql-sq_0411-sq_0412-sq_0413
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Daily savings: $1.50
+  Retained: sq_0413
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_0411->reports.funnel_all_years, sq_0412->reports.funnel_by_device,
+  sq_0413->marts.funnel_wide.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_0412 $0.7529 / day (daily reports.funnel_by_device)
+    sq_0411 $0.7515 / day (daily reports.funnel_all_years)
+stop-repeated-sql-sq_5016-sq_5017
+  Keep one copy of SQL that is repeated after comment removal
+  Kind: assumed. Change: business_logic.
+  Daily savings: $1.19
+  Retained: sq_5016
+  Evidence: The SQL matches after comment and whitespace removal. Destinations:
+  sq_5016->marts.exec_revenue_board, sq_5017->marts.exec_revenue_board_copy.
+  Assumption: The retained destination can stand in for the stopped destinations.
+  Uncertainty: Identical SQL text can write different tables. The retained copy is the
+  cheapest copy that has a recorded consumer, or the cheapest copy when none do.
+  config_id breaks ties. Whether one destination can replace the others was not
+  measured.
+    sq_5017 $1.1938 / day (daily marts.exec_revenue_board_copy)
+stop-zero-scan-failures
+  Disable enabled queries whose observed scan cost is already zero
+  Kind: measured. Change: owner_confirmation.
+  Daily savings: $0.00
+  Retained: none
+  Evidence: Every recorded execution failed and the estimated daily rate is zero.
+  Queries: 3.
+  Assumption: No replacement query is added.
+  Uncertainty: These executions are already estimated at zero scan cost, so disabling
+  them does not reduce the estimated bill. The failure is an operational issue. Do not
+  delete the destination tables.
+    sq_5013 $0.0000 / day (daily marts.app_version_adoption)
+    sq_5014 $0.0000 / day (daily marts.partner_postback_recon)
+    sq_5015 $0.0000 / day (daily marts.session_quality_v1)
+
+6. Schedule stops that do not change SQL
+The amounts below are the scenario totals already calculated. They are not a combined
+  saving.
+  stop-no-recorded-consumer: $39.41 / day (measured)
+  stop-zero-scan-failures: $0.00 / day (measured)
+
+7. Changes that need a business or SQL decision
+The amounts below are the scenario totals already calculated. They are not a combined
+  saving.
+  one-run-per-observed-day: $1038.75 / day (assumed)
+  stop-repeated-sql-sq_1016-sq_5010: $16.22 / day (assumed)
+  stop-repeated-sql-sq_1012-sq_5007: $5.63 / day (assumed)
+  stop-repeated-sql-sq_1017-sq_5009: $2.63 / day (assumed)
+  stop-competing-writer-reports.revenue_daily: $1.77 / day (assumed)
+  stop-repeated-sql-sq_0105-sq_0114: $1.77 / day (assumed)
+  stop-repeated-sql-sq_0411-sq_0412-sq_0413: $1.50 / day (assumed)
+  stop-repeated-sql-sq_5016-sq_5017: $1.19 / day (assumed)
+
+8. Audit findings by observed daily cost
+The amount is the observed daily rate of the queries the finding names. It is not the
+  saving from the audit recommendation unless a scenario above stops those queries and
+  prices that stop.
+  OP-PARTITION-FILTER P3 needs_verification $1406.1499 / day configs: sq_0101, sq_0105,
+  sq_0107, sq_0108, sq_0109, sq_0110, sq_0114, sq_0301, sq_0401, sq_0402, sq_0403,
+  sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1006, sq_1007, sq_1008, sq_1009,
+  sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016, sq_1017, sq_1018,
+  sq_1019, sq_1020, sq_1021, sq_1022, sq_1024, sq_1025, sq_1026, sq_1027, sq_3001,
+  sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008, sq_3009, sq_3010,
+  sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3018, sq_3019,
+  sq_3020, sq_3021, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027, sq_3030, sq_4001,
+  sq_4002, sq_4003, sq_4004, sq_4005, sq_4006, sq_4007, sq_4008, sq_4009, sq_4010,
+  sq_4011, sq_4012, sq_4013, sq_4014, sq_4015, sq_4016, sq_4017, sq_4018, sq_4022,
+  sq_4023, sq_4024, sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012,
+  sq_5013, sq_5014, sq_5015, sq_5016, sq_5017, sq_5018, sq_5019. Missing daily rate:
+  sq_5019.
+    Partition predicates are missing or not bound to each partitioned source
+  OP-RESOURCES-EXCEEDED P2 confirmed $1150.9061 / day configs: sq_0105, sq_0109,
+  sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008, sq_3009,
+  sq_3010, sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3018,
+  sq_3020, sq_3021, sq_3022, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027, sq_3028,
+  sq_3029, sq_3030, sq_4001, sq_4003, sq_4004, sq_4005, sq_4006, sq_4009, sq_4010,
+  sq_4011, sq_4012, sq_4013, sq_4014, sq_4016, sq_4017, sq_4018, sq_4019, sq_4020,
+  sq_4021, sq_4022, sq_4023, sq_4024.
+    Run history records Resources exceeded failures
+  CR-SCHEMA-COUNT P2 indicated $1142.8246 / day configs: sq_0101, sq_0102, sq_0103,
+  sq_0104, sq_0105, sq_0108, sq_0109, sq_0113, sq_0114, sq_0201, sq_0202, sq_0301,
+  sq_0302, sq_0303, sq_0401, sq_0402, sq_0403, sq_0411, sq_0412, sq_0413, sq_0501,
+  sq_0502, sq_0503, sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1008, sq_1009,
+  sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016, sq_1017, sq_1018,
+  sq_1019, sq_1020, sq_1023, sq_1024, sq_1025, sq_1026, sq_1027, sq_1028, sq_3001,
+  sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3008, sq_3009, sq_3010, sq_3012,
+  sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3020, sq_3021, sq_3022, sq_3023,
+  sq_3025, sq_3027, sq_3028, sq_3029, sq_3030, sq_4002, sq_4003, sq_4004, sq_4005,
+  sq_4006, sq_4007, sq_4008, sq_4009, sq_4010, sq_4011, sq_4012, sq_4013, sq_4014,
+  sq_4015, sq_4016, sq_4018, sq_4019, sq_4020, sq_4021, sq_4022, sq_4023, sq_4024,
+  sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5012, sq_5013, sq_5014, sq_5015,
+  sq_5016, sq_5017, sq_5018, sq_5019. Missing daily rate: sq_5019.
+    Outermost SELECT lists do not match catalog column counts
+  MN-RETIRE-NO-RECORDED-CONSUMER P3 needs_verification $39.4143 / day configs: sq_5007,
+  sq_5008, sq_5009, sq_5010, sq_5011, sq_5012.
+    Enabled queries have no consumer in the supplied graph or usage extract
+  MN-REPEATED-SQL-sq_1016-sq_5010 P3 confirmed $32.3638 / day configs: sq_1016, sq_5010.
+    Scheduled queries share the same SQL text
+  CR-UNPARSEABLE-SQL P1 confirmed $18.9274 / day configs: sq_0107, sq_0110, sq_3024,
+  sq_5011.
+    sqlglot cannot parse 4 scheduled queries
+  MN-REPEATED-SQL-sq_1012-sq_5007 P3 confirmed $11.3058 / day configs: sq_1012, sq_5007.
+    Scheduled queries share the same SQL text
+  CR-ROW-NUMBER-NO-ORDER P2 confirmed $6.8854 / day configs: sq_0102, sq_3027.
+    ROW_NUMBER has no ORDER BY
+  MN-REPEATED-SQL-sq_1017-sq_5009 P3 confirmed $5.2744 / day configs: sq_1017, sq_5009.
+    Scheduled queries share the same SQL text
+  OP-CYCLE-sq_0301-sq_0302-sq_0303 P2 confirmed $4.7915 / day configs: sq_0301, sq_0302,
+  sq_0303.
+    Scheduled queries form a dependency cycle
+  CR-SHORT-LOOKBACK-sq_1001 P2 indicated $3.5099 / day configs: sq_1001, sq_5002.
+    sq_1001 truncates reports.funnel_daily_core on a shorter outer date bound than a reader filters
+  MN-REPEATED-SQL-sq_0105-sq_0114 P3 confirmed $3.4362 / day configs: sq_0105, sq_0114.
+    Scheduled queries share the same SQL text
+  CR-COLUMN-WRITER-CONFLICT P2 needs_verification $3.2717 / day configs: sq_0104,
+  sq_0105, sq_0106, sq_5001.
+    Scheduled writers of one table do not project the same columns a reader uses
+  OP-SCHEDULE-OVERLAP-sq_0101-sq_0104 P1 confirmed $3.1106 / day configs: sq_0101,
+  sq_0104.
+    Matched executions overlap: sq_0101 ends after sq_0104 starts
+  OP-DUPLICATE-WRITER-sq_0104-sq_0105 P1 confirmed $2.9757 / day configs: sq_0104,
+  sq_0105.
+    reports.revenue_daily has more than one scheduled writer
+  MN-REPEATED-SQL-sq_5016-sq_5017 P3 confirmed $2.3811 / day configs: sq_5016, sq_5017.
+    Scheduled queries share the same SQL text
+  MN-REPEATED-SQL-sq_0411-sq_0412-sq_0413 P3 confirmed $2.2538 / day configs: sq_0411,
+  sq_0412, sq_0413.
+    Scheduled queries share the same SQL text
+  OP-SCHEDULE-OVERLAP-sq_0105-sq_5001 P2 confirmed $1.9317 / day configs: sq_0105,
+  sq_5001.
+    Matched executions overlap: sq_0105 ends after sq_5001 starts
+  OP-SCHEDULE-OVERLAP-sq_0105-sq_0106 P2 confirmed $1.9138 / day configs: sq_0105,
+  sq_0106.
+    Matched executions overlap: sq_0105 ends after sq_0106 starts
+  OP-SCHEDULE-OVERLAP-sq_0102-sq_0104 P2 confirmed $1.4996 / day configs: sq_0102,
+  sq_0104.
+    Matched executions overlap: sq_0102 ends after sq_0104 starts
+  CR-SHORT-LOOKBACK-sq_0104 P2 indicated $1.4969 / day configs: sq_0104, sq_0106,
+  sq_5001.
+    sq_0104 truncates reports.revenue_daily on a shorter outer date bound than a reader filters
+  OP-CYCLE-sq_0201-sq_0202 P2 confirmed $0.4738 / day configs: sq_0201, sq_0202.
+    Scheduled queries form a dependency cycle
+  CR-COLUMN-NOT-PROJECTED P1 needs_verification $0.4380 / day configs: sq_0106, sq_0111,
+  sq_0112, sq_5005.
+    Downstream SQL names a column the upstream scheduled SQL does not project
+  OP-SELF-READ-sq_0112 P2 confirmed $0.1855 / day configs: sq_0112.
+    sq_0112 reads its own destination
+  OP-ALREADY-DISABLED P4 confirmed $0.0000 / day configs: sq_5019. Missing daily rate:
+  sq_5019.
+    A scheduled query is already disabled and has no recorded consumer
+  OP-CATALOG-GAP-raw-app_versions P2 needs_verification $0.0000 / day configs: sq_5013.
+    raw.app_versions is read by scheduled SQL and is absent from the supplied catalog
+  OP-CATALOG-GAP-raw-partner_postbacks P2 needs_verification $0.0000 / day configs:
+  sq_5014.
+    raw.partner_postbacks is read by scheduled SQL and is absent from the supplied catalog
+  OP-CATALOG-GAP-staging-stg_sessions_v1 P2 needs_verification $0.0000 / day configs:
+  sq_5015.
+    staging.stg_sessions_v1 is read by scheduled SQL and is absent from the supplied catalog
+  OP-NOT-FOUND-raw-app_versions P1 confirmed $0.0000 / day configs: sq_5013.
+    Run history records Not found while reading raw.app_versions
+  OP-NOT-FOUND-raw-partner_postbacks P1 confirmed $0.0000 / day configs: sq_5014.
+    Run history records Not found while reading raw.partner_postbacks
+  OP-NOT-FOUND-staging-stg_sessions_v1 P1 confirmed $0.0000 / day configs: sq_5015.
+    Run history records Not found while reading staging.stg_sessions_v1
+
+9. Limitations
+total_bytes_processed is the byte count stored in run history. It is not a BigQuery
+  billing export. Cached bytes, bytes written, and charges for a failed query are not in
+  the supplied files.
+Observed schedule dates that are not contiguous: 0 configurations. A daily rate uses the
+  count of observed dates, not the calendar span from the first date to the last.
+The hourly scenario and the writer and repeated-SQL scenarios state a replacement that
+  was not run. Their dollar figures stay assumptions. The no-consumer figure is the
+  observed rate only, and the usage extract can still have missed a reader.
+Disabling a schedule is not deleting a table. This report does not select queries for
+  deletion.
