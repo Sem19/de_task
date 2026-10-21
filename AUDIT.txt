@@ -170,7 +170,8 @@ Evidence: Paired 90 of 90 reader executions with the latest successful sq_0101 s
   day 03:10 timezone Europe/Kyiv. History timestamps are compared as offset-aware
   instants. The config timezone is not used to rewrite those offsets. Timestamps without
   an offset are ignored. This is observed execution overlap, not proof of stale data. A
-  run whose end_time is earlier than its start_time is omitted.
+  run whose end_time is earlier than its start_time is kept. The recorded instants are
+  compared as stored.
 Impact: The reader may have started before that producer execution finished. This does not prove
   the reader scanned a stale snapshot.
 Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
@@ -336,7 +337,8 @@ Evidence: Paired 37 of 90 reader executions with the latest successful sq_0102 s
   schedule every day 03:10 timezone Europe/Kyiv. History timestamps are compared as
   offset-aware instants. The config timezone is not used to rewrite those offsets.
   Timestamps without an offset are ignored. This is observed execution overlap, not
-  proof of stale data. A run whose end_time is earlier than its start_time is omitted.
+  proof of stale data. A run whose end_time is earlier than its start_time is kept. The
+  recorded instants are compared as stored.
 Impact: The reader may have started before that producer execution finished. This does not prove
   the reader scanned a stale snapshot.
 Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
@@ -356,8 +358,9 @@ Evidence: Paired 10 of 14 reader executions with the latest successful sq_0105 s
   day 04:00 timezone Europe/Kyiv. History timestamps are compared as offset-aware
   instants. The config timezone is not used to rewrite those offsets. Timestamps without
   an offset are ignored. This is observed execution overlap, not proof of stale data. A
-  run whose end_time is earlier than its start_time is omitted. At least one schedule is
-  hourly, so a later run on the same calendar day is not paired with an earlier reader.
+  run whose end_time is earlier than its start_time is kept. The recorded instants are
+  compared as stored. At least one schedule is hourly, so a later run on the same
+  calendar day is not paired with an earlier reader.
 Impact: The reader may have started before that producer execution finished. This does not prove
   the reader scanned a stale snapshot.
 Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
@@ -377,8 +380,9 @@ Evidence: Paired 10 of 14 reader executions with the latest successful sq_0105 s
   day 05:00 timezone Europe/Kyiv. History timestamps are compared as offset-aware
   instants. The config timezone is not used to rewrite those offsets. Timestamps without
   an offset are ignored. This is observed execution overlap, not proof of stale data. A
-  run whose end_time is earlier than its start_time is omitted. At least one schedule is
-  hourly, so a later run on the same calendar day is not paired with an earlier reader.
+  run whose end_time is earlier than its start_time is kept. The recorded instants are
+  compared as stored. At least one schedule is hourly, so a later run on the same
+  calendar day is not paired with an earlier reader.
 Impact: The reader may have started before that producer execution finished. This does not prove
   the reader scanned a stale snapshot.
 Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
@@ -900,9 +904,8 @@ Recommendation: Do not disable these queries and do not delete the tables. An ow
   refresh can stop.
 
 5. Retirement candidates
-A candidate has no certain read of its destination and no dashboard, ad-hoc,
-or scheduled_query row in downstream_usage.csv.
-An uncertain read of the destination removes the query from this list.
+A candidate has no certain or uncertain read of its destination and no
+dashboard, ad-hoc, or scheduled_query row in downstream_usage.csv.
 The usage file covers only the supplied extract.
 These candidates cannot be disabled automatically.
 The extract can miss a reader. SQL that did not parse can hide a reference.
@@ -911,7 +914,8 @@ Disabling a schedule does not delete a table, and this audit does not recommend 
 Production validation means an owner confirms the table can stop being refreshed.
 OP-ALREADY-DISABLED [confirmed] sq_5019
 MN-RETIRE-NO-RECORDED-CONSUMER [needs_verification] sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012
-Queries that fail because a source is missing, and queries with a dashboard, are not candidates.
+A Not found failure does not by itself add or remove a candidate.
+A destination with any usage row, including a dashboard, is not a candidate.
 
 6. Limitations
 Uncertain read edges: 8. They are recovered backtick names from SQL that did not parse.

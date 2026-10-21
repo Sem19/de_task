@@ -9,6 +9,7 @@ from __future__ import annotations
 import textwrap
 
 from audit.common import CATEGORY_ORDER
+from audit.schedule import INVERTED_TIMESTAMP_RULE
 from audit.models import AuditFinding, Category
 from estate.models import Inventory
 from graph.analyze import (
@@ -246,9 +247,8 @@ def _retirement(findings: tuple[AuditFinding, ...]) -> str:
     ]
     lines = [
         "5. Retirement candidates",
-        "A candidate has no certain read of its destination and no dashboard, ad-hoc,",
-        "or scheduled_query row in downstream_usage.csv.",
-        "An uncertain read of the destination removes the query from this list.",
+        "A candidate has no certain or uncertain read of its destination and no",
+        "dashboard, ad-hoc, or scheduled_query row in downstream_usage.csv.",
         "The usage file covers only the supplied extract.",
         "These candidates cannot be disabled automatically.",
         "The extract can miss a reader. SQL that did not parse can hide a reference.",
@@ -263,8 +263,9 @@ def _retirement(findings: tuple[AuditFinding, ...]) -> str:
         lines.append(
             f"{finding.finding_id} [{finding.confidence}] {', '.join(finding.config_ids)}"
         )
+    lines.append("A Not found failure does not by itself add or remove a candidate.")
     lines.append(
-        "Queries that fail because a source is missing, and queries with a dashboard, are not candidates."
+        "A destination with any usage row, including a dashboard, is not a candidate."
     )
     return "\n".join(lines)
 
@@ -288,7 +289,7 @@ def _limitations(inventory: Inventory, graph: Graph) -> str:
             "Catalog column counts are not column names. A missing catalog row is not proof the table is absent from production.",
             "Schedule pairs use the timestamp offset. Config timeZone is not applied on top of that offset.",
             "A later run on the same calendar date is not treated as the predecessor of an earlier reader.",
-            "A run whose end_time is earlier than its start_time is kept. The recorded instants are compared as stored.",
+            INVERTED_TIMESTAMP_RULE,
             "Lookback days come from current-timestamp predicates, not from every INTERVAL expression.",
             "Partition predicates are judged per source. No execution plan was requested.",
             "No query was executed. No production incident is inferred beyond the history states and error strings.",

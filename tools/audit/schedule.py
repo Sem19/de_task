@@ -18,6 +18,11 @@ from graph.models import Graph
 from audit.common import make_finding, table_name
 from audit.models import AuditFinding
 
+INVERTED_TIMESTAMP_RULE = (
+    "A run whose end_time is earlier than its start_time is kept. "
+    "The recorded instants are compared as stored."
+)
+
 
 def schedule_findings(
     inventory: Inventory,
@@ -98,7 +103,8 @@ def _evidence(
         "The config timezone is not used to rewrite those offsets. "
         "Timestamps without an offset are ignored. "
         "This is observed execution overlap, not proof of stale data. "
-        "A run whose end_time is earlier than its start_time is omitted." + cadence
+        + INVERTED_TIMESTAMP_RULE
+        + cadence
     )
 
 

@@ -491,6 +491,85 @@ def test_daily_overlap_is_a_clock_fact_and_hourly_overlap_is_lower_priority(
     assert "hourly" in hourly.evidence
 
 
+def test_run_with_end_before_start_stays_in_the_overlap_count(tmp_path: Path) -> None:
+    history = []
+    for day in range(1, 15):
+        date = f"2026-06-{day:02d}"
+        if day < 14:
+            producer_start, producer_end = (
+                f"{date}T03:00:10+00:00",
+                f"{date}T03:40:00+00:00",
+            )
+        else:
+            producer_start, producer_end = (
+                f"{date}T03:41:00+00:00",
+                f"{date}T03:40:00+00:00",
+            )
+        history.append(
+            [
+                f"p{day}",
+                "q_prod",
+                "reports.out",
+                f"{date}T03:00:00+00:00",
+                producer_start,
+                producer_end,
+                "SUCCEEDED",
+                "",
+                "0",
+                "0",
+            ]
+        )
+        history.append(
+            [
+                f"r{day}",
+                "q_read",
+                "reports.child",
+                f"{date}T03:10:00+00:00",
+                f"{date}T03:10:05+00:00",
+                f"{date}T03:20:00+00:00",
+                "SUCCEEDED",
+                "",
+                "0",
+                "0",
+            ]
+        )
+    _write(
+        tmp_path,
+        [
+            ("q_prod", "reports", "out", "SELECT 1 AS id FROM `acme.raw.events`"),
+            ("q_read", "reports", "child", "SELECT id FROM `acme.reports.out`"),
+        ],
+        history=history,
+        catalog=[
+            [
+                "raw.events",
+                "BASE TABLE",
+                "1",
+                "2",
+                "",
+                "",
+                "2026-01-01",
+                "2026-01-01",
+                "1",
+            ],
+        ],
+    )
+    findings = _findings(tmp_path)
+    overlap = next(
+        item
+        for item in findings
+        if item.finding_id == "OP-SCHEDULE-OVERLAP-q_prod-q_read"
+    )
+    assert "Paired 14 of 14" in overlap.evidence
+    assert "end_time is earlier than its start_time is kept" in overlap.evidence
+    assert "is omitted" not in overlap.evidence
+    inventory = load_inventory(tmp_path)
+    parses = parse_inventory(inventory)
+    text = render_audit(inventory, parses, build_graph(inventory, parses), findings)
+    packed = " ".join(text.split())
+    assert packed.count("end_time is earlier than its start_time is kept") >= 2
+
+
 def test_catalog_gap_is_separate_from_not_found(tmp_path: Path) -> None:
     _write(
         tmp_path,
