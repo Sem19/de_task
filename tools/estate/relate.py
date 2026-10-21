@@ -9,9 +9,9 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from tools.estate import kinds
-from tools.estate.identifiers import TableId, try_parse_table_id
-from tools.estate.models import (
+from estate import kinds
+from estate.identifiers import TableId, try_parse_table_id
+from estate.models import (
     CatalogRecord,
     Finding,
     HistoryRecord,
@@ -21,7 +21,7 @@ from tools.estate.models import (
     TransferConfig,
     UsageRecord,
 )
-from tools.estate.sources import SCHEDULED_QUERY
+from estate.sources import SCHEDULED_QUERY
 
 
 def pair_queries(

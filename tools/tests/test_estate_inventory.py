@@ -8,7 +8,7 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
-from tools.estate import (
+from estate import (
     EstateInputError,
     config_id_from_transfer_name,
     format_summary,
@@ -16,7 +16,7 @@ from tools.estate import (
     parse_sql_filename,
     parse_table_id,
 )
-from tools.inventory import main
+from inventory import main
 
 _HISTORY_HEADER = (
     "run_id,config_id,destination,schedule_time,start_time,end_time,"
@@ -24,7 +24,7 @@ _HISTORY_HEADER = (
 )
 _USAGE_HEADER = "table,consumer_kind,consumer_id,queries_30d"
 _CATALOG_HEADER = "table,type,row_count,size_bytes,partition_column,clustering,created,last_modified,columns"
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _config(
@@ -622,7 +622,7 @@ class ContractTest(unittest.TestCase):
 
     def test_cli_logs_a_load_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertLogs("tools.inventory", level="ERROR") as captured:
+            with self.assertLogs("inventory", level="ERROR") as captured:
                 code = main([tmp])
         self.assertEqual(code, 2)
         self.assertTrue(any("scheduled_queries" in line for line in captured.output))

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from tools.estate.models import Inventory
+from estate.models import Inventory
 
 
 def format_summary(inventory: Inventory) -> str:

@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from tools.estate.errors import EstateInputError
+from estate.errors import EstateInputError
 
 
 def read_text(path: Path) -> str:

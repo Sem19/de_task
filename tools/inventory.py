@@ -4,7 +4,7 @@ The report is written to stdout. Load failures are logged and produce exit
 code 2. Findings inside a readable estate are part of the report, not errors.
 
 Usage:
-    python -m tools.inventory task2_estate
+    python -m inventory ../task2_estate
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import logging
 import sys
 from pathlib import Path
 
-from tools.estate import EstateInputError, format_summary, load_inventory
+from estate import EstateInputError, format_summary, load_inventory
 
 logger = logging.getLogger(__name__)
 

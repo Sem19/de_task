@@ -9,15 +9,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.estate.models import Finding, Inventory
-from tools.estate.relate import (
+from estate.models import Finding, Inventory
+from estate.relate import (
     history_findings,
     pair_queries,
     schema_findings,
     usage_findings,
     writers_by_table,
 )
-from tools.estate.sources import (
+from estate.sources import (
     load_catalog,
     load_history,
     load_schemas,
@@ -25,7 +25,7 @@ from tools.estate.sources import (
     load_transfer_configs,
     load_usage,
 )
-from tools.estate.summary import format_summary
+from estate.summary import format_summary
 
 __all__ = ["format_summary", "load_inventory"]
 

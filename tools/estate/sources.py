@@ -11,16 +11,16 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from tools.estate import kinds
-from tools.estate.errors import EstateInputError
-from tools.estate.identifiers import (
+from estate import kinds
+from estate.errors import EstateInputError
+from estate.identifiers import (
     config_id_from_transfer_name,
     parse_sql_filename,
     parse_table_id,
     try_parse_table_id,
 )
-from tools.estate.io import load_csv, load_json_object, read_text
-from tools.estate.models import (
+from estate.io import load_csv, load_json_object, read_text
+from estate.models import (
     CatalogRecord,
     Finding,
     HistoryRecord,

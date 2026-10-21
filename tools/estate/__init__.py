@@ -1,18 +1,18 @@
 """Load and validate scheduled-query estate inputs.
 
-SQL parsing and the dependency graph are separate stages and are not part
-of this package yet.
+SQL parsing lives in ``sql``. The dependency graph is not part of this
+package.
 """
 
-from tools.estate.errors import EstateInputError
-from tools.estate.identifiers import (
+from estate.errors import EstateInputError
+from estate.identifiers import (
     TableId,
     config_id_from_transfer_name,
     parse_sql_filename,
     parse_table_id,
 )
-from tools.estate.load import format_summary, load_inventory
-from tools.estate.models import Inventory, ScheduledQuery
+from estate.load import format_summary, load_inventory
+from estate.models import Inventory, ScheduledQuery
 
 __all__ = [
     "EstateInputError",

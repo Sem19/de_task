@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from tools.estate.identifiers import TableId
+from estate.identifiers import TableId
 
 
 class Finding(NamedTuple):
