@@ -1,0 +1,185 @@
+DECISIONS
+Scheduled Queries to Dataform, revenue_daily route
+Project: acme-analytics-prod, location EU
+Dataform project: task2_estate/dataform
+
+1. Migration boundary
+Decision. Implement the 13 actions that can be compiled from the current SQL:
+raw.payments, raw.subscriptions, raw.fx_rates; staging.stg_payments (sq_0101),
+staging.stg_subscriptions (sq_0102), staging.stg_fx_daily (sq_0103);
+reports.revenue_daily (sq_0104), reports.revenue_by_region (sq_0106),
+marts.revenue_unified (sq_5001); and the four uniqueness assertions. Leave
+the other 54 scheduled queries that only share a raw or staging source on
+their existing transfer configs.
+
+Reason. migration_scope for the table name revenue_daily is ancestors,
+writers, and scheduled-query descendants of reports.revenue_daily. A query
+that only reads raw.payments, raw.subscriptions, raw.fx_rates, or
+staging.stg_fx_daily is not on that path. sq_0107 (reports.revenue_daily_eur),
+sq_0108 (reports.revenue_daily_strict), and sq_0109 (reports.ltv_by_cohort)
+are in that sibling set. The estate's expensive hourly rebuilds, including
+sq_3030, are too.
+
+Follow-up. The design still lists 16 actions. The three that are not built
+are sq_0111, sq_0112, and sq_5005. See section 6.
+
+2. One Dataform writer for reports.revenue_daily
+Decision. reports.revenue_daily is the sq_0104 statement only: daily
+WRITE_TRUNCATE, settled payments, 3-day window, grain
+payment_date, country_code, region, tier, billing_period_days. sq_0105 is
+not a Dataform action and is not appended into that table.
+
+Reason. sq_0105 is an hourly WRITE_APPEND from raw.payments. Its columns
+are attempt_hour, processor, status, attempt_no, attempts, users,
+amount_local, and settle_rate. sq_0106 and sq_5001 read payment_date and
+region, which sq_0104 projects and sq_0105 does not (AUDIT
+CR-COLUMN-WRITER-CONFLICT). The same statement text already runs as
+sq_0114 into reports.payment_settle_hourly, hourly WRITE_APPEND, with
+consumers looker/funnel_explorer and sheets/cfo_weekly. A second Dataform
+writer of that hourly table was rejected for the same reason.
+
+Follow-up. sq_0105 is still ENABLED in transfer_configs.json. Disabling it
+before a production Dataform write to reports.revenue_daily has not been
+approved and has not been done. sq_0114 stays a Scheduled Query.
+
+3. Materialization
+Decision. The six migrated queries are Dataform tables. Each run replaces
+the table with the SELECT result. None are incremental. No partition or
+cluster was added. Transfer configs for these six have partitioning_field
+empty and write_disposition WRITE_TRUNCATE.
+
+Reason. That is the current write. An incremental merge would keep rows
+the truncate currently removes. sq_0112 is the query whose SQL reads its
+own destination; it is not in this build, so no incremental was required.
+
+4. Three-day window on reports.revenue_daily
+Decision. Keep DATE(created_at) >= CURRENT_DATE() - 3 days on sq_0104.
+Leave sq_0106 at 400 days and sq_5001 at 730 days. CURRENT_DATE() stays
+unqualified, as in those files.
+
+Reason. Lengthening the writer would publish days the scheduled truncate
+does not write. CR-SHORT-LOOKBACK-sq_0104 records the mismatch and does
+not treat the 3-day predicate as proof of what the live table retains.
+The catalog snapshot for reports.revenue_daily is 249,576,926 rows and 10
+columns; the file projects 8 columns. We did not reshape the SELECT to
+the catalog count.
+
+Follow-up. Whether 3 days is the reporting contract still needs an owner.
+Until then, the 400-day and 730-day filters only see whatever sq_0104 emits.
+
+5. Subscription dedupe
+Decision. staging.stg_subscriptions keeps sq_0102 as written. ROW_NUMBER
+is partitioned by subscription_id and has no ORDER BY. The 7-day filter
+on DATE(updated_at) stays inside the window subquery.
+
+Reason. AUDIT CR-ROW-NUMBER-NO-ORDER is confirmed for sq_0102. Adding
+updated_at or ingested_at would pick a row the current statement does not
+pick. The assertion on subscription_id only counts duplicates. It does
+not decide the winner.
+
+Follow-up. An ORDER BY needs the owner to name the sort. sq_3027 has the
+same pattern and was not migrated.
+
+6. KPI models not built
+Decision. No SQLX for sq_0111 (reports.exec_kpi_daily), sq_0112
+(reports.kpi_snapshot), or sq_5005 (marts.exec_kpi_v2). Their scheduled
+configs stay enabled.
+
+Reason. sq_0106 renames payment_date to report_date. sq_0111 still selects
+and filters payment_date, using CURRENT_DATE("Europe/Kyiv") and a 120-day
+window. sq_5005 reads payment_date from exec_kpi_daily, which sq_0111 also
+renames to report_date. sq_0112 reads metric_name and metric_value from
+exec_kpi_daily; sq_0111 does not project them (CR-COLUMN-NOT-PROJECTED).
+sq_0112 also reads reports.kpi_snapshot for snapshot_date < CURRENT_DATE()
+and unions today (OP-SELF-READ-sq_0112). Copying that into a table that
+only reads upstream would drop the history. Renaming columns so the files
+compile would change the checked-in SQL. The live tables were not queried.
+
+7. Uniqueness assertions
+Decision. Four assertion actions, each GROUP BY the grain the SQL already
+produces and HAVING COUNT(*) > 1:
+
+  assert_stg_payments_payment_id              payment_id
+  assert_stg_subscriptions_subscription_id    subscription_id
+  assert_stg_fx_daily_rate_date_currency      rate_date, currency
+  assert_revenue_daily_grain                  payment_date, country_code,
+                                              region, tier, billing_period_days
+
+They live in dataform_assertions and are tagged revenue_daily. A null key
+is one group. There is no IS NULL check, no uniqueKey on the table
+configs, and no check on rate_to_usd or last_known_rate.
+
+Reason. The grains are the ROW_NUMBER partitions and the sq_0104 GROUP BY.
+A uniqueness failure is a repeated key. It is not evidence that a column
+must be present, which subscription row should survive, or that
+revenue_usd matches a finance total.
+
+8. Scheduling and cutover
+Decision. The migrated actions run in ref() order under the tag
+revenue_daily. The clocks 02:40, 03:00, 03:10, 04:00, and 05:00 are not
+recreated. No transfer config was disabled. No production table was
+rebuilt. dataform run was not executed.
+
+Reason. sq_0104 is scheduled 10 minutes after sq_0101 and sq_0102.
+OP-SCHEDULE-OVERLAP-sq_0101-sq_0104 paired 90 of 90 reader executions, and
+sq_0102 overlapped on 37 of 90. Dependency order removes that gap for the
+migrated tables. It does not say when raw.payments, raw.subscriptions, or
+raw.fx_rates have landed. Those three are declarations.
+
+Follow-up. Production cutover is still the sequence in PLAN.txt: compile,
+compare in an isolated dataset, get approval for the sq_0104 contract,
+disable sq_0105, then disable the six migrated configs before Dataform
+writes the production names. sq_0114 stays on. A rollback turns Dataform
+off before any of those scheduled writers is turned back on.
+
+9. Cost
+Decision. Treat this migration as a lineage and ownership change. Do not
+book a saving from it.
+
+Reason. COST.txt estimates the whole estate at $1,423.51/day
+(227.7608 TiB/day) and $45,737.93 historical. The revenue_daily graph
+route, 10 queries including sq_0105 and the three KPI queries, is
+$5.79/day (0.9256 TiB/day). On that route sq_0105 is $1.7748/day and
+sq_0104 is $1.2009/day. sq_0114, which we kept, is $1.6615/day. The
+repeated-SQL finding for sq_0105 and sq_0114 lists $3.4362/day of
+associated spend, which is the observed cost of those two queries, not a
+saving from dropping one. The largest driver in the estate is sq_3030 at
+$611.66/day, outside this route. The $39.41/day no-consumer figure and
+the hourly-to-daily arithmetic in COST.txt are not actions taken here.
+
+10. What compilation checked
+Decision. Accept the slice on file equivalence and a successful compile.
+Do not claim the numbers match production.
+
+make compile exits 0 on dataformCoreVersion 3.0.0. The compiled graph has
+13 targets: the 3 declarations, 6 tables, and 4 assertions above, all in
+acme-analytics-prod, with empty graphErrors and no duplicate names.
+sqlglot's BigQuery normalization of each compiled table query matches the
+scheduled file for sq_0101, sq_0102, sq_0103, sq_0104, sq_0106, and
+sq_5001 after comments are removed. The three revenue queries also match
+with comments kept. The staging files add comments only, including the
+sq_0102 ORDER BY note. The four assertions compile to GROUP BY the keys
+in section 7 with HAVING COUNT(*) > 1.
+
+That shows the SQL we would submit is the SQL we copied, and that
+Dataform can order the actions. It does not show row counts, revenue_usd,
+or assertion results. There is no warehouse in this lab, and no query was
+run in BigQuery.
+
+Questions for the data owner
+Five questions before any further migration. Each one changes the SQL or
+the cutover.
+
+  1. Can sq_0105 be disabled before Dataform writes reports.revenue_daily,
+     leaving the hourly attempt grain on sq_0114
+     (reports.payment_settle_hourly)?
+  2. For sq_0111 and sq_5005, is the filter column payment_date or
+     report_date? For sq_0112, do metric_name and metric_value exist on
+     the live exec_kpi_daily table, and where does snapshot history live
+     if the self-read cannot be rebuilt?
+  3. Is the 3-day truncate on sq_0104 the intended contents of
+     reports.revenue_daily, given readers that filter 400 and 730 days?
+  4. What ORDER BY should sq_0102 use inside ROW_NUMBER, if the surviving
+     subscription row needs to be deterministic?
+  5. When do raw.payments, raw.subscriptions, and raw.fx_rates finish
+     landing, so the revenue_daily workflow has a time of day?
