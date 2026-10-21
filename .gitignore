@@ -2,3 +2,95 @@
 # assignment's data files are JSON and must survive into the candidate's copy.
 !task2_estate/transfer_configs.json
 !task2_estate/schemas.json
+
+# =====================================
+# Python
+# =====================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# =====================================
+# Virtual environments
+# =====================================
+.venv/
+venv/
+env/
+ENV/
+
+# =====================================
+# Environment variables and secrets
+# =====================================
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+secrets/
+credentials.json
+
+# =====================================
+# Python testing and coverage
+# =====================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# =====================================
+# IDE and editor
+# =====================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# =====================================
+# macOS
+# =====================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# =====================================
+# Logs and temporary files
+# =====================================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# =====================================
+# Local databases and runtime data
+# =====================================
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+pgdata/
+
+# =====================================
+# Docker local overrides
+# =====================================
+docker-compose.override.yml
+compose.override.yaml
+
+# =====================================
+# Local exports
+# =====================================
+exports/
+output/
