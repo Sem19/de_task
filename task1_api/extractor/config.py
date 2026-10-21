@@ -32,15 +32,20 @@ REPORT_PAGE_LIMIT = 1000
 REPORT_ORDER_BY = "date,country,channel"
 
 REPORT_DIMENSIONS = ("date", "country", "channel")
-REPORT_METRICS = (
+REPORT_COUNT_METRICS = (
     "impressions",
     "clicks",
     "installs",
     "signups",
     "payers",
-    "spend",
-    "revenue",
 )
+REPORT_MONEY_METRICS = ("spend", "revenue")
+REPORT_METRICS = REPORT_COUNT_METRICS + REPORT_MONEY_METRICS
+REPORT_REQUIRED_FIELDS = REPORT_DIMENSIONS + REPORT_METRICS
+
+# Signed 64-bit range of ``partner_report`` bigint columns.
+POSTGRES_BIGINT_MIN = -9223372036854775808
+POSTGRES_BIGINT_MAX = 9223372036854775807
 
 REPORT_STATUS_PENDING = "PENDING"
 REPORT_STATUS_RUNNING = "RUNNING"
