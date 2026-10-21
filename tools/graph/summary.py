@@ -53,6 +53,16 @@ def format_summary(graph: Graph) -> str:
 
 
 def _counts(graph: Graph) -> list[str]:
+    """Return node, edge, and uncertain-edge count lines.
+
+    Args:
+        graph: Dependency graph. Uncertain edges are excluded from the
+            per-relation counts and totaled on their own line.
+
+    Returns:
+        ``nodes``, ``edges``, ``nodes.<kind>``, ``edges.<relation>``, and
+        ``edges.uncertain`` lines.
+    """
     kinds = ("table", "query", "consumer")
     relations = ("reads", "writes", "consumes")
     lines = [f"nodes: {len(graph.nodes)}", f"edges: {len(graph.edges)}"]
@@ -70,18 +80,44 @@ def _counts(graph: Graph) -> list[str]:
 
 
 def _pairs(label: str, rows: tuple[tuple[str, tuple[str, ...]], ...]) -> list[str]:
+    """Format table-to-query groups, or ``none``.
+
+    Args:
+        label: Summary label, such as ``duplicate_writer``.
+        rows: ``(table id, query ids)`` already sorted.
+
+    Returns:
+        One line per group, or a single ``<label>: none`` line.
+    """
     if not rows:
         return [f"{label}: none"]
     return [f"{label}: {table} {' '.join(queries)}" for table, queries in rows]
 
 
 def _components(components: tuple[tuple[str, ...], ...]) -> list[str]:
+    """Format strongly connected components, or ``none``.
+
+    Args:
+        components: Sorted components of sorted node ids.
+
+    Returns:
+        One ``component:`` line per component, or ``component: none``.
+    """
     if not components:
         return ["component: none"]
     return [f"component: {' '.join(component)}" for component in components]
 
 
 def _ids(label: str, node_ids: tuple[str, ...]) -> str:
+    """Join node ids under a label, or write ``none``.
+
+    Args:
+        label: Summary label.
+        node_ids: Sorted ids.
+
+    Returns:
+        One summary line.
+    """
     if not node_ids:
         return f"{label}: none"
     return f"{label}: " + " ".join(node_ids)

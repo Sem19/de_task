@@ -137,6 +137,17 @@ def _no_consumer_scenario(
     by_config: dict[str, ConfigCost],
     readers: set[str],
 ) -> Scenario | None:
+    """Price stopping enabled queries whose destination has no recorded reader.
+
+    Args:
+        inventory: Usage rows. Any consumer of the destination excludes it.
+        by_config: Config estimates keyed by config id.
+        readers: ``dataset.table`` values with a graph read, certain or uncertain.
+
+    Returns:
+        The measured scenario, or ``None`` when every enabled destination
+        has a reader or no destination. Members are ordered by config id.
+    """
     idle = []
     for config in by_config.values():
         if config.enabled is not True or not config.destination:
@@ -168,6 +179,16 @@ def _no_consumer_scenario(
 
 
 def _zero_scan_scenario(by_config: dict[str, ConfigCost]) -> Scenario | None:
+    """Price disabling enabled queries whose executions all failed at zero cost.
+
+    Args:
+        by_config: Config estimates keyed by config id.
+
+    Returns:
+        The cleanup scenario, or ``None`` when no enabled config has
+        executions, all of them failed, and a daily rate of exactly zero.
+        A missing rate is not zero.
+    """
     failed = [
         config
         for config in by_config.values()
@@ -205,6 +226,22 @@ def _writer_scenarios(
     by_config: dict[str, ConfigCost],
     queries: dict[str, ScheduledQuery],
 ) -> list[Scenario]:
+    """Price keeping the cheapest writer of each table that has several.
+
+    A table is skipped when no writer has a daily rate. The retained writer
+    is the lowest rate, with config id breaking ties. The other writers,
+    including those with no rate, would stop.
+
+    Args:
+        graph: Certain write edges. ``duplicate_writers`` supplies the groups.
+        by_config: Config estimates keyed by config id. A writer missing
+            from this map is omitted from the group.
+        queries: Paired queries, used for disposition text.
+
+    Returns:
+        One assumed scenario per remaining table. The scenario id uses
+        ``dataset.table``.
+    """
     scenarios = []
     for table_node, writer_nodes in duplicate_writers(graph):
         writers = []
@@ -253,6 +290,21 @@ def _repeated_scenarios(
     inventory: Inventory,
     readers: set[str],
 ) -> list[Scenario]:
+    """Price keeping one copy of SQL that matches after comments are removed.
+
+    The retained copy is the cheapest copy that has a recorded consumer, or
+    the cheapest copy when none do. A group is skipped when no copy has a
+    daily rate.
+
+    Args:
+        queries: Paired queries. Groups smaller than two are ignored.
+        by_config: Config estimates keyed by config id.
+        inventory: Usage rows. A consumer counts as a recorded reader.
+        readers: ``dataset.table`` values with a graph read, certain or uncertain.
+
+    Returns:
+        One assumed scenario per remaining group.
+    """
     groups: dict[str, list[ScheduledQuery]] = {}
     for query in queries.values():
         groups.setdefault(_normalize_sql(query.sql_text), []).append(query)
@@ -309,6 +361,20 @@ def _repeated_scenarios(
 
 
 def _hourly_scenario(by_config: dict[str, ConfigCost]) -> Scenario | None:
+    """Price a hypothetical single execution per observed day for hourly queries.
+
+    A query is included when it is hourly, has a historical cost and a daily
+    rate, and has more executions than observed dates. The difference is the
+    daily rate minus the average cost of one recorded execution. A difference
+    that is not positive is omitted.
+
+    Args:
+        by_config: Config estimates keyed by config id.
+
+    Returns:
+        The hypothetical scenario, or ``None`` when no query qualifies.
+        Members are ordered by descending difference, then config id.
+    """
     members: list[ScenarioMember] = []
     for config in by_config.values():
         dates = len(config.observed_schedule_dates)
@@ -372,6 +438,19 @@ def _route_cost(
     by_config: dict[str, ConfigCost],
     table_name: str,
 ) -> RouteCost:
+    """Sum the daily rates of the scheduled queries on one lineage route.
+
+    Args:
+        graph: Dependency graph. The route is ``migration_scope``.
+        by_config: Config estimates keyed by config id. A scope query that
+            is absent here is dropped.
+        table_name: Exact table name passed to the scope walk.
+
+    Returns:
+        Route totals. Queries with no rate stay listed and are omitted from
+        the sums. Sibling queries that only share an upstream source are
+        totaled separately.
+    """
     scope = migration_scope(graph, table_name)
     config_ids = [
         node_id.removeprefix("query:")
@@ -404,6 +483,18 @@ def _finding_costs(
     findings: tuple[AuditFinding, ...],
     by_config: dict[str, ConfigCost],
 ) -> tuple[FindingCost, ...]:
+    """Attach observed daily cost to each audit finding.
+
+    Args:
+        findings: Audit findings, in their current order.
+        by_config: Config estimates keyed by config id.
+
+    Returns:
+        One row per finding, ordered by descending daily cost, then finding
+        id. A config with no rate, and a config id that is not in
+        ``by_config``, is listed as missing and omitted from the sum. A
+        finding with no priced config has a daily cost of zero.
+    """
     priced = []
     for finding in findings:
         known = []
@@ -443,6 +534,28 @@ def _stop_scenario(
     uncertainty: str,
     money_role: MoneyRole,
 ) -> Scenario:
+    """Build a scenario that stops ``stopped`` and keeps ``retains``.
+
+    Configs with no daily rate stay in ``stops`` and are omitted from the
+    dollar figure. Their ids are appended to the uncertainty text.
+
+    Args:
+        scenario_id: Stable id.
+        title: One-line title.
+        kind: ``measured`` or ``assumed``.
+        change_class: ``owner_confirmation`` or ``business_logic``.
+        stopped: Configs that would stop. Order does not matter.
+        retains: Config ids that would remain.
+        evidence: What the files show.
+        assumption: What the dollar figure depends on.
+        uncertainty: Limits on the figure. Missing rates are appended.
+        money_role: How the report is allowed to describe the amount.
+
+    Returns:
+        The scenario. ``daily_savings_usd`` is ``None`` when no stopped
+        config has a rate. Members are the priced configs, by descending
+        rate and then config id.
+    """
     known = [
         config for config in stopped if config.normalized_daily_run_rate_usd is not None
     ]
@@ -498,6 +611,17 @@ def _retain(
     configs: list[ConfigCost],
     preferred: set[str] | None = None,
 ) -> ConfigCost | None:
+    """Choose the cheapest config that has a daily rate.
+
+    Args:
+        configs: Candidates. Configs with no rate are ineligible.
+        preferred: Config ids to prefer. When at least one eligible config
+            is in this set, the others are dropped. An empty set is ignored.
+
+    Returns:
+        The lowest rate, with config id breaking ties, or ``None`` when
+        no candidate has a rate.
+    """
     eligible = [
         config for config in configs if config.normalized_daily_run_rate_usd is not None
     ]
@@ -516,6 +640,17 @@ def _retain(
 def _priced(
     by_config: dict[str, ConfigCost], config_ids: list[str]
 ) -> tuple[PricedQuery, ...]:
+    """Attach daily figures to config ids that exist in the cost engine.
+
+    Args:
+        by_config: Config estimates keyed by config id.
+        config_ids: Ids to look up. Unknown ids are skipped. Duplicates
+            are kept if the caller passed them twice.
+
+    Returns:
+        Priced queries. Configs with no rate come last, then descending
+        rate, then config id.
+    """
     configs = [
         by_config[config_id] for config_id in config_ids if config_id in by_config
     ]
@@ -541,10 +676,28 @@ def _priced(
 
 
 def _sum_rates(amounts: Iterable[Decimal | None]) -> Decimal:
+    """Sum the amounts that were published.
+
+    Args:
+        amounts: Daily rates. ``None`` is skipped.
+
+    Returns:
+        The sum. Zero when every amount is missing.
+    """
     return sum_published(amount for amount in amounts if amount is not None)
 
 
 def _writer_label(query: ScheduledQuery | None, config: ConfigCost) -> str:
+    """Format one competing writer for a scenario's evidence line.
+
+    Args:
+        query: Paired query. A missing query uses ``unknown disposition``.
+        config: Config estimate. A missing schedule or destination is named
+            as unknown.
+
+    Returns:
+        ``<config_id> <disposition> <schedule> -> <destination>``.
+    """
     disposition = "unknown disposition" if query is None else query.write_disposition
     schedule = config.schedule or "unknown schedule"
     destination = config.destination or "unknown destination"
@@ -552,16 +705,43 @@ def _writer_label(query: ScheduledQuery | None, config: ConfigCost) -> str:
 
 
 def _normalize_sql(sql: str) -> str:
+    """Remove comments and collapse whitespace so copies can be grouped.
+
+    Args:
+        sql: Scheduled-query text. It is not parsed.
+
+    Returns:
+        The text with block comments replaced, line comments removed, and
+        runs of whitespace reduced to one space.
+    """
     text = _COMMENT_BLOCK.sub(" ", sql)
     text = _COMMENT_LINE.sub("", text)
     return _SPACE.sub(" ", text).strip()
 
 
 def _minus(left: Decimal, right: Decimal) -> Decimal:
+    """Subtract at the wide sum precision.
+
+    Args:
+        left: Published amount.
+        right: Published amount.
+
+    Returns:
+        ``left - right``, without display rounding.
+    """
     with localcontext(_WIDE):
         return left - right
 
 
 def _scenario_key(scenario: Scenario) -> tuple[bool, Decimal, str]:
+    """Return the report order for one scenario.
+
+    Args:
+        scenario: Priced scenario. A missing savings amount sorts last.
+
+    Returns:
+        Unmeasured scenarios after measured ones, then descending daily
+        savings, then scenario id.
+    """
     savings = scenario.daily_savings_usd
     return (savings is None, -(savings or Decimal(0)), scenario.scenario_id)

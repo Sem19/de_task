@@ -94,6 +94,15 @@ def source_findings(
 
 
 def _not_found(inventory: Inventory) -> dict[str, tuple[int, str]]:
+    """Count history rows whose error starts with ``Not found``.
+
+    Args:
+        inventory: Loaded estate.
+
+    Returns:
+        Config id to ``(row count, first matching error message)``, with
+        keys in config-id order.
+    """
     counts: dict[str, int] = defaultdict(int)
     first: dict[str, str] = {}
     for row in inventory.history:

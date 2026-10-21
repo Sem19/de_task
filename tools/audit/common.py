@@ -58,22 +58,51 @@ def make_finding(
 
 
 def sort_key(finding: AuditFinding) -> tuple[int, int, str]:
-    """Return the register order: category, priority, then finding id."""
+    """Return the register order: category, priority, then finding id.
+
+    Args:
+        finding: One audit item.
+
+    Returns:
+        ``(category rank, priority, finding_id)``. Operational ranks before
+        correctness, which ranks before maintainability.
+    """
     return (CATEGORY_ORDER[finding.category], finding.priority, finding.finding_id)
 
 
 def sql_path(query: ScheduledQuery) -> str:
-    """Return the repository-relative SQL path for a paired query."""
+    """Return the repository-relative SQL path for a paired query.
+
+    Args:
+        query: Paired scheduled query. Only the filename is used.
+
+    Returns:
+        ``task2_estate/scheduled_queries/<filename>``.
+    """
     return f"task2_estate/scheduled_queries/{query.sql_path.name}"
 
 
 def table_name(node_id: str) -> str:
-    """Strip a ``table:`` graph id down to ``dataset.table``."""
+    """Strip a ``table:`` graph id down to ``dataset.table``.
+
+    Args:
+        node_id: Graph node id. A missing prefix is left unchanged.
+
+    Returns:
+        The id without a leading ``table:``.
+    """
     return node_id.removeprefix("table:")
 
 
 def query_name(node_id: str) -> str:
-    """Strip a ``query:`` graph id down to the config id."""
+    """Strip a ``query:`` graph id down to the config id.
+
+    Args:
+        node_id: Graph node id. A missing prefix is left unchanged.
+
+    Returns:
+        The id without a leading ``query:``.
+    """
     return node_id.removeprefix("query:")
 
 
@@ -81,6 +110,12 @@ def writers_by_table(graph: Graph) -> dict[str, tuple[str, ...]]:
     """Map ``dataset.table`` to the config ids that write it.
 
     Uncertain write edges are omitted. Ids are sorted and unique.
+
+    Args:
+        graph: Dependency graph.
+
+    Returns:
+        Destination ``dataset.table`` to sorted writer config ids.
     """
     grouped: dict[str, list[str]] = defaultdict(list)
     for edge in graph.edges:
@@ -92,7 +127,14 @@ def writers_by_table(graph: Graph) -> dict[str, tuple[str, ...]]:
 
 
 def certain_reads(graph: Graph) -> tuple[tuple[str, str], ...]:
-    """Return ``(dataset.table, config_id)`` pairs for certain read edges."""
+    """Return ``(dataset.table, config_id)`` pairs for certain read edges.
+
+    Args:
+        graph: Dependency graph. Uncertain reads are omitted.
+
+    Returns:
+        Unique pairs, sorted by table then config id.
+    """
     pairs = {
         (table_name(edge.source), query_name(edge.target))
         for edge in graph.edges
@@ -102,7 +144,15 @@ def certain_reads(graph: Graph) -> tuple[tuple[str, str], ...]:
 
 
 def consumers(inventory: Inventory, table: str) -> tuple[tuple[str, str], ...]:
-    """Return ``(kind, id)`` usage rows recorded for ``dataset.table``."""
+    """Return ``(kind, id)`` usage rows recorded for ``dataset.table``.
+
+    Args:
+        inventory: Loaded estate. Rows with an unparsed table are skipped.
+        table: Join key, ``dataset.table``.
+
+    Returns:
+        Unique consumer pairs, sorted.
+    """
     found = {
         (row.consumer_kind, row.consumer_id)
         for row in inventory.usage
@@ -112,7 +162,16 @@ def consumers(inventory: Inventory, table: str) -> tuple[tuple[str, str], ...]:
 
 
 def error_counts(inventory: Inventory, prefix: str) -> dict[str, int]:
-    """Count history rows whose error message starts with ``prefix``."""
+    """Count history rows whose error message starts with ``prefix``.
+
+    Args:
+        inventory: Loaded estate. A missing error message counts as empty.
+        prefix: Literal start of ``error_message``.
+
+    Returns:
+        Config id to the number of matching rows. Ids with zero matches
+        are omitted.
+    """
     counts: dict[str, int] = defaultdict(int)
     for row in inventory.history:
         message = row.raw.get("error_message") or ""
@@ -124,7 +183,15 @@ def error_counts(inventory: Inventory, prefix: str) -> dict[str, int]:
 def queries_for(
     by_id: dict[str, ScheduledQuery], config_ids: tuple[str, ...] | set[str]
 ) -> tuple[ScheduledQuery, ...]:
-    """Return paired queries for ids that exist, in config_id order."""
+    """Return paired queries for ids that exist, in config_id order.
+
+    Args:
+        by_id: Paired queries keyed by config id.
+        config_ids: Ids to look up. Unknown ids are skipped. Duplicates collapse.
+
+    Returns:
+        The matching queries, sorted by config id.
+    """
     return tuple(
         by_id[config_id] for config_id in sorted(set(config_ids)) if config_id in by_id
     )

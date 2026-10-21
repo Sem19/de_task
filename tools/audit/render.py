@@ -59,6 +59,11 @@ def render_audit(
 
 
 def _header() -> str:
+    """Return the title block and the confidence legend.
+
+    Returns:
+        Lines joined with newlines. No timestamp is included.
+    """
     return "\n".join(
         [
             "AUDIT",
@@ -77,6 +82,14 @@ def _header() -> str:
 
 
 def _executive(findings: tuple[AuditFinding, ...]) -> str:
+    """Return the counts and the highest-priority titles.
+
+    Args:
+        findings: Sorted audit findings.
+
+    Returns:
+        The executive-summary section.
+    """
     counts = {"confirmed": 0, "indicated": 0, "needs_verification": 0}
     for finding in findings:
         counts[finding.confidence] += 1
@@ -100,6 +113,15 @@ def _executive(findings: tuple[AuditFinding, ...]) -> str:
 
 
 def _ranked(findings: tuple[AuditFinding, ...], confidence: str) -> list[str]:
+    """Return up to five titles at one confidence, highest priority first.
+
+    Args:
+        findings: Audit findings.
+        confidence: ``confirmed``, ``indicated``, or ``needs_verification``.
+
+    Returns:
+        ``P<n> <id>: <title>`` lines, or ``["none"]`` when nothing matches.
+    """
     chosen = sorted(
         (finding for finding in findings if finding.confidence == confidence),
         key=lambda finding: (
@@ -121,6 +143,16 @@ def _summary(
     parses: tuple[SqlParse, ...],
     graph: Graph,
 ) -> str:
+    """Return section 1, the estate and graph counts.
+
+    Args:
+        inventory: Loaded estate.
+        parses: One parse per paired query.
+        graph: Dependency graph.
+
+    Returns:
+        The estate-summary section.
+    """
     failed = sum(not item.parsed for item in parses)
     enabled = sum(query.enabled is True for query in inventory.queries)
     disabled = sum(query.enabled is False for query in inventory.queries)
@@ -144,6 +176,14 @@ def _summary(
 
 
 def _dependencies(graph: Graph) -> str:
+    """Return section 2, the revenue_daily slice and structural findings.
+
+    Args:
+        graph: Dependency graph.
+
+    Returns:
+        The dependency-overview section.
+    """
     targets = tables_named(graph, "revenue_daily")
     upstream_ids = sorted(
         {node for target in targets for node in upstream(graph, target)}
@@ -190,6 +230,14 @@ def _dependencies(graph: Graph) -> str:
 
 
 def _register(findings: tuple[AuditFinding, ...]) -> str:
+    """Return section 3, findings grouped by category.
+
+    Args:
+        findings: Findings already sorted by category, priority, and id.
+
+    Returns:
+        The problem-register section.
+    """
     lines = [
         "3. Problem register",
         "Sorted by category, then priority, then finding id.",
@@ -213,6 +261,14 @@ def _register(findings: tuple[AuditFinding, ...]) -> str:
 
 
 def _details(findings: tuple[AuditFinding, ...]) -> str:
+    """Return section 4, one block per finding.
+
+    Args:
+        findings: Findings in register order.
+
+    Returns:
+        The findings section. Blocks are separated by a blank line.
+    """
     blocks = ["4. Findings"]
     for finding in findings:
         blocks.append(_one(finding))
@@ -220,6 +276,14 @@ def _details(findings: tuple[AuditFinding, ...]) -> str:
 
 
 def _one(finding: AuditFinding) -> str:
+    """Format one finding as labeled lines.
+
+    Args:
+        finding: Audit item. Long text is wrapped to the report width.
+
+    Returns:
+        The finding block, without a trailing blank line.
+    """
     paths = ", ".join(finding.sql_paths)
     configs = ", ".join(finding.config_ids)
     return "\n".join(
@@ -239,6 +303,15 @@ def _one(finding: AuditFinding) -> str:
 
 
 def _retirement(findings: tuple[AuditFinding, ...]) -> str:
+    """Return section 5, retirement candidates and already-disabled queries.
+
+    Args:
+        findings: Audit findings. Only ``MN-RETIRE`` and
+            ``OP-ALREADY-DISABLED`` ids are listed.
+
+    Returns:
+        The retirement section.
+    """
     chosen = [
         finding
         for finding in findings
@@ -271,6 +344,15 @@ def _retirement(findings: tuple[AuditFinding, ...]) -> str:
 
 
 def _limitations(inventory: Inventory, graph: Graph) -> str:
+    """Return section 6, what the supplied files do not prove.
+
+    Args:
+        inventory: Loaded estate, used for project resolution.
+        graph: Dependency graph, including uncertain edges.
+
+    Returns:
+        The limitations section.
+    """
     resolution = resolve_projects(inventory, graph)
     uncertain = sum(edge.uncertain for edge in graph.edges)
     sql = " ".join(resolution.sql_projects) or "none"
@@ -299,6 +381,15 @@ def _limitations(inventory: Inventory, graph: Graph) -> str:
 
 
 def _edge_bits(graph: Graph) -> list[str]:
+    """Count edges by relation and by whether the read was recovered.
+
+    Args:
+        graph: Dependency graph.
+
+    Returns:
+        ``"<relation> <confirmed|uncertain> <count>"`` for reads, writes,
+        and consumes, in that order.
+    """
     bits = []
     for relation in ("reads", "writes", "consumes"):
         for uncertain, label in ((False, "confirmed"), (True, "uncertain")):
@@ -311,11 +402,27 @@ def _edge_bits(graph: Graph) -> list[str]:
 
 
 def _short(values: tuple[str, ...] | list[str]) -> str:
+    """Join values with spaces, or return ``none`` when the sequence is empty.
+
+    Args:
+        values: Already ordered ids or labels.
+
+    Returns:
+        A single line fragment.
+    """
     if not values:
         return "none"
     return " ".join(values)
 
 
 def _wrap(text: str) -> str:
+    """Collapse whitespace and wrap text to the report width.
+
+    Args:
+        text: Evidence, impact, or recommendation prose.
+
+    Returns:
+        Wrapped text. Continuation lines are indented two spaces.
+    """
     packed = " ".join(text.split())
     return textwrap.fill(packed, width=_WIDTH, subsequent_indent="  ")

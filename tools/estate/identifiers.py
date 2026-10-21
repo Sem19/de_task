@@ -28,10 +28,20 @@ class TableId(NamedTuple):
 
     @property
     def dataset_table(self) -> str:
+        """Return the join key, ``dataset.table``.
+
+        Returns:
+            Dataset and table separated by a dot. The project is not included.
+        """
         return f"{self.dataset}.{self.table}"
 
     @property
     def fully_qualified(self) -> str | None:
+        """Return ``project.dataset.table`` when the source named a project.
+
+        Returns:
+            The three-part name, or ``None`` when ``project`` is absent.
+        """
         if self.project is None:
             return None
         return f"{self.project}.{self.dataset}.{self.table}"
@@ -99,9 +109,16 @@ def parse_table_id(value: str) -> TableId:
 
 
 def try_parse_table_id(value: str) -> TableId | None:
-    """Parse a table id, or return None when the cell is not one.
+    """Parse a table id, or return ``None`` when the cell is not one.
 
     Unparseable ids are source findings. They must not abort the inventory.
+
+    Args:
+        value: Identifier text. The same forms as :func:`parse_table_id`.
+
+    Returns:
+        The parsed id, or ``None`` when :func:`parse_table_id` would raise
+        ``ValueError``.
     """
     try:
         return parse_table_id(value)

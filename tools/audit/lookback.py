@@ -78,6 +78,19 @@ def _longer_readers(
     readers: tuple[str, ...] | list[str],
     writer_days: int,
 ) -> list[tuple[str, int]]:
+    """Return readers whose outer lookback is at least 30 days and longer.
+
+    Uncertain SQL and readers with no day count are skipped.
+
+    Args:
+        by_id: Paired queries keyed by config id.
+        readers: Config ids that read the writer's table.
+        writer_days: The writer's outer lookback, in days.
+
+    Returns:
+        ``(config id, reader days)`` for readers that ask for more history.
+        Sorted by config id.
+    """
     longer = []
     for reader in sorted(set(readers)):
         result = retention_days(by_id[reader].sql_text)

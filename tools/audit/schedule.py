@@ -86,6 +86,20 @@ def _evidence(
     shared: int,
     hourly: bool,
 ) -> str:
+    """Describe one producer/reader overlap in the words the report quotes.
+
+    Args:
+        by_id: Paired queries, used for schedule text and timezone.
+        producer: Writer config id.
+        reader: Reader config id.
+        table: ``dataset.table`` the reader reads and the producer writes.
+        bad: Reader executions whose matched producer was still running.
+        shared: Reader executions that had a producer to pair with.
+        hourly: Whether either schedule text mentions an hour.
+
+    Returns:
+        The evidence sentence, including the inverted-timestamp rule.
+    """
     left = by_id[producer]
     right = by_id[reader]
     cadence = (
@@ -111,6 +125,18 @@ def _evidence(
 def _slots(
     inventory: Inventory,
 ) -> dict[str, list[tuple[datetime, datetime, datetime]]]:
+    """Group successful runs by config id and schedule time.
+
+    Naive timestamps are dropped. Several rows with the same schedule time
+    collapse to the earliest start and the latest end.
+
+    Args:
+        inventory: Run history.
+
+    Returns:
+        Config id to ``(schedule_time, start_time, end_time)`` sorted by
+        schedule time.
+    """
     grouped: dict[str, dict[datetime, tuple[datetime, datetime]]] = {}
     for row in inventory.history:
         if row.raw.get("state") != "SUCCEEDED":
@@ -141,6 +167,18 @@ def _paired_overlap(
     producer: str,
     reader: str,
 ) -> tuple[int, int]:
+    """Pair each reader execution with the latest producer at or before it.
+
+    Args:
+        slots: Successful runs from :func:`_slots`.
+        producer: Writer config id.
+        reader: Reader config id.
+
+    Returns:
+        ``(late, shared)``. ``shared`` is the number of reader executions
+        that had an earlier-or-equal producer schedule time. ``late`` is how
+        many of those still had the producer running when the reader started.
+    """
     left = slots.get(producer, [])
     right = slots.get(reader, [])
     times = [item[0] for item in left]
@@ -158,6 +196,14 @@ def _paired_overlap(
 
 
 def _aware(value: str) -> datetime | None:
+    """Parse an ISO timestamp that already carries an offset.
+
+    Args:
+        value: History cell. Empty and naive values are ignored.
+
+    Returns:
+        The aware instant, or ``None`` when the text is not an aware ISO time.
+    """
     try:
         parsed = datetime.fromisoformat(value)
     except ValueError:
@@ -168,10 +214,26 @@ def _aware(value: str) -> datetime | None:
 
 
 def _hourly(schedule: str | None) -> bool:
+    """Return whether the schedule text mentions an hour.
+
+    Args:
+        schedule: Transfer-config schedule, or ``None``.
+
+    Returns:
+        ``True`` when the lowercased text contains ``hour``.
+    """
     return "hour" in (schedule or "").lower()
 
 
 def _writers(graph: Graph) -> dict[str, tuple[str, ...]]:
+    """Map a table node id to the config ids that write it.
+
+    Args:
+        graph: Dependency graph. Uncertain writes are omitted.
+
+    Returns:
+        Table node id to sorted, unique config ids.
+    """
     grouped: dict[str, list[str]] = {}
     for edge in graph.edges:
         if edge.relation == "writes" and not edge.uncertain:
@@ -184,6 +246,16 @@ def _writers(graph: Graph) -> dict[str, tuple[str, ...]]:
 
 
 def _in_cycle(graph: Graph, left: str, right: str) -> bool:
+    """Return whether both queries sit in one strongly connected component.
+
+    Args:
+        graph: Dependency graph.
+        left: Producer config id.
+        right: Reader config id.
+
+    Returns:
+        ``True`` when a component contains both query nodes.
+    """
     for component in strongly_connected(graph):
         ids = {
             node.removeprefix("query:")

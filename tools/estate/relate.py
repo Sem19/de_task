@@ -79,7 +79,14 @@ def pair_queries(
 
 
 def writers_by_table(queries: list[ScheduledQuery]) -> dict[str, tuple[str, ...]]:
-    """Map ``dataset.table`` to the config ids that declare it, sorted by id."""
+    """Map ``dataset.table`` to the config ids that declare it.
+
+    Args:
+        queries: Paired queries. A query with no destination is omitted.
+
+    Returns:
+        Destination to config ids sorted by id.
+    """
     grouped: dict[str, list[str]] = defaultdict(list)
     for query in queries:
         if query.destination is not None:
@@ -94,6 +101,15 @@ def history_findings(
 
     Rows keep their original destination string in ``raw``. Comparison with
     the config uses ``dataset.table``.
+
+    Args:
+        history: History rows in file order.
+        catalog: Catalog rows. Only parsed tables count as present.
+
+    Returns:
+        Findings for unparsed destinations, destinations absent from the
+        catalog, unknown config ids, and destinations that differ from the
+        paired query.
     """
     catalog_tables = _catalog_tables(catalog)
     unknown: dict[str, list[HistoryRecord]] = defaultdict(list)
@@ -126,7 +142,16 @@ def history_findings(
 def usage_findings(
     usage: list[UsageRecord], catalog: list[CatalogRecord]
 ) -> list[Finding]:
-    """Report usage rows that cite an unknown scheduled query or a table outside the catalog."""
+    """Report usage rows that cite an unknown query or a table outside the catalog.
+
+    Args:
+        usage: Usage rows in file order.
+        catalog: Catalog rows. Only parsed tables count as present.
+
+    Returns:
+        Findings for unparsed table cells, unmapped scheduled-query consumers,
+        and tables absent from the catalog.
+    """
     catalog_tables = _catalog_tables(catalog)
     unknown: dict[str, int] = defaultdict(int)
     missing_tables: dict[str, list[UsageRecord]] = defaultdict(list)
@@ -168,7 +193,14 @@ def usage_findings(
 
 
 def schema_findings(schemas: list[SchemaTable]) -> list[Finding]:
-    """Report schema entries whose ``dataset.table`` is not in the catalog."""
+    """Report schema entries whose ``dataset.table`` is not in the catalog.
+
+    Args:
+        schemas: Schema tables. ``in_catalog`` is already computed.
+
+    Returns:
+        One finding per schema table that missed the catalog, in input order.
+    """
     return [
         Finding(
             kinds.SCHEMA_NOT_IN_CATALOG,
@@ -186,6 +218,17 @@ def _pairing_findings(
     sql_group: list[SqlFile],
     config_group: list[TransferConfig],
 ) -> list[Finding]:
+    """Report a config id that is duplicated or present on only one side.
+
+    Args:
+        config_id: Id from a filename, a transfer config, or both.
+        sql_group: SQL files with that id.
+        config_group: Transfer configs with that id.
+
+    Returns:
+        Duplicate, missing-SQL, and missing-config findings. An id with one
+        file and one config returns an empty list.
+    """
     findings: list[Finding] = []
     if len(sql_group) > 1 or len(config_group) > 1:
         findings.append(
@@ -231,6 +274,16 @@ def _scheduled_query(
 
     SQL is compared exactly, including comments and whitespace. Neither side
     is reformatted. ``enabled`` is derived and the source state fields are kept.
+
+    Args:
+        root: Estate root, used to resolve ``_meta_sql_file``.
+        config_id: Shared id.
+        sql_file: The one SQL file.
+        config: The one transfer config.
+        findings: Mutable list. Disagreements are appended.
+
+    Returns:
+        The paired query. Findings are not returned separately.
     """
     destination = _destination(config)
     for finding in (
@@ -267,6 +320,17 @@ def _scheduled_query(
 def _sql_text_finding(
     config_id: str, sql_file: SqlFile, config: TransferConfig
 ) -> Finding | None:
+    """Return a finding when the file text differs from ``params.query``.
+
+    Args:
+        config_id: Shared id.
+        sql_file: Checked-in SQL. Compared exactly, including whitespace.
+        config: Transfer config. A missing ``params.query`` is not a mismatch.
+
+    Returns:
+        A ``sql_text_mismatch`` finding, or ``None`` when the texts match
+        or the config has no query text.
+    """
     if config.params_query is None or sql_file.text == config.params_query:
         return None
     return Finding(
@@ -286,6 +350,19 @@ def _destination_name_finding(
     sql_file: SqlFile,
     config: TransferConfig,
 ) -> Finding | None:
+    """Return a finding when the filename destination differs from the config.
+
+    A filename that did not parse has ``None`` parts. Those are not equal to
+    a set config destination, so the pair is reported.
+
+    Args:
+        config_id: Shared id.
+        sql_file: Filename dataset and table. Either part may be ``None``.
+        config: Transfer-config destination. A missing part skips the check.
+
+    Returns:
+        A ``destination_mismatch`` finding, or ``None``.
+    """
     if config.destination_dataset is None or config.destination_table is None:
         return None
     if (
@@ -315,6 +392,18 @@ def _unparsed_destination_finding(
     config: TransferConfig,
     destination: TableId | None,
 ) -> Finding | None:
+    """Return a finding when both destination parts are set but do not parse.
+
+    Args:
+        config_id: Shared id.
+        config: Source of the two destination fields.
+        destination: Result of parsing those fields. ``None`` with both fields
+            present is the failure.
+
+    Returns:
+        An ``unparsed_table_id`` finding, or ``None`` when the destination
+        parsed or a part is missing.
+    """
     if destination is not None:
         return None
     if config.destination_dataset is None or config.destination_table is None:
@@ -337,6 +426,17 @@ def _meta_file_finding(
     sql_file: SqlFile,
     config: TransferConfig,
 ) -> Finding | None:
+    """Return a finding when ``_meta_sql_file`` does not name this SQL file.
+
+    Args:
+        root: Estate root.
+        config_id: Shared id.
+        sql_file: The paired file.
+        config: Transfer config. A missing meta path is a mismatch.
+
+    Returns:
+        A ``meta_sql_file_mismatch`` finding, or ``None`` when the path matches.
+    """
     if _meta_sql_matches(root, sql_file.path, config.meta_sql_file):
         return None
     return Finding(
@@ -348,6 +448,17 @@ def _meta_file_finding(
 
 
 def _enabled_finding(config_id: str, config: TransferConfig) -> Finding | None:
+    """Return a finding when ``state`` and ``disabled`` disagree.
+
+    A missing field is not a disagreement.
+
+    Args:
+        config_id: Shared id.
+        config: Transfer config.
+
+    Returns:
+        An ``enabled_state_mismatch`` finding, or ``None``.
+    """
     if _enabled(config.state, config.disabled) is not None:
         return None
     if config.state is None or config.disabled is None:
@@ -361,6 +472,14 @@ def _enabled_finding(config_id: str, config: TransferConfig) -> Finding | None:
 
 
 def _shared_destinations(queries: list[ScheduledQuery]) -> list[Finding]:
+    """Report destinations declared by more than one paired query.
+
+    Args:
+        queries: Paired queries. Queries without a destination are omitted.
+
+    Returns:
+        One ``shared_destination`` finding per table, sorted by ``dataset.table``.
+    """
     grouped: dict[str, list[ScheduledQuery]] = defaultdict(list)
     for query in queries:
         if query.destination is not None:
@@ -391,6 +510,15 @@ def _shared_destinations(queries: list[ScheduledQuery]) -> list[Finding]:
 
 
 def _destination(config: TransferConfig) -> TableId | None:
+    """Parse the config destination, or return ``None`` when it is incomplete.
+
+    Args:
+        config: Transfer config.
+
+    Returns:
+        The table id, or ``None`` when either part is missing or the pair
+        is not a table identifier.
+    """
     if config.destination_dataset is None or config.destination_table is None:
         return None
     return try_parse_table_id(
@@ -403,6 +531,14 @@ def _enabled(state: str | None, disabled: bool | None) -> bool | None:
 
     ENABLED with disabled false is enabled. DISABLED with disabled true is
     disabled. Any other combination is unknown and stays None.
+
+    Args:
+        state: Transfer-config ``state``.
+        disabled: Transfer-config ``disabled``.
+
+    Returns:
+        ``True`` when enabled, ``False`` when disabled, or ``None`` when the
+        fields disagree or either is missing.
     """
     if state == "ENABLED" and disabled is False:
         return True
@@ -412,10 +548,18 @@ def _enabled(state: str | None, disabled: bool | None) -> bool | None:
 
 
 def _meta_sql_matches(root: Path, sql_path: Path, meta: str | None) -> bool:
-    """True when ``_meta_sql_file`` names this SQL file relative to the estate root.
+    """Return whether ``_meta_sql_file`` names this SQL file.
 
     A bare filename matches on the base name. A relative path must equal the
     file's path from ``root`` using forward slashes.
+
+    Args:
+        root: Estate root.
+        sql_path: Paired SQL file.
+        meta: ``_meta_sql_file`` value, or ``None``.
+
+    Returns:
+        ``True`` only when the meta path names this file.
     """
     if meta is None:
         return False
@@ -432,12 +576,29 @@ def _meta_sql_matches(root: Path, sql_path: Path, meta: str | None) -> bool:
 
 
 def _catalog_tables(catalog: list[CatalogRecord]) -> set[str]:
+    """Return ``dataset.table`` values that parsed in the catalog.
+
+    Args:
+        catalog: Catalog rows. Unparsed table cells are omitted.
+
+    Returns:
+        The join keys.
+    """
     return {
         record.table.dataset_table for record in catalog if record.table is not None
     }
 
 
 def _unparsed_destinations(label: str, unparsed: dict[str, int]) -> list[Finding]:
+    """Build one finding per destination string that is not a table id.
+
+    Args:
+        label: Source named in the message, such as ``run_history destination``.
+        unparsed: Raw cell to the number of rows.
+
+    Returns:
+        Findings sorted by the raw cell.
+    """
     return [
         Finding(
             kinds.UNPARSED_TABLE_ID,
@@ -450,6 +611,15 @@ def _unparsed_destinations(label: str, unparsed: dict[str, int]) -> list[Finding
 
 
 def _unparsed_tables(label: str, unparsed: dict[str, int]) -> list[Finding]:
+    """Build one finding per table cell that is not a table id.
+
+    Args:
+        label: Source named in the message.
+        unparsed: Raw cell to the number of rows.
+
+    Returns:
+        Findings sorted by the raw cell.
+    """
     return [
         Finding(
             kinds.UNPARSED_TABLE_ID,
@@ -462,6 +632,14 @@ def _unparsed_tables(label: str, unparsed: dict[str, int]) -> list[Finding]:
 
 
 def _absent_history_tables(absent: dict[str, int]) -> list[Finding]:
+    """Build one finding per history destination missing from the catalog.
+
+    Args:
+        absent: Raw destination cell to the number of rows.
+
+    Returns:
+        Findings sorted by the raw cell.
+    """
     return [
         Finding(
             kinds.HISTORY_TABLE_NOT_IN_CATALOG,
@@ -477,6 +655,14 @@ def _absent_history_tables(absent: dict[str, int]) -> list[Finding]:
 
 
 def _unknown_history(unknown: dict[str, list[HistoryRecord]]) -> list[Finding]:
+    """Build one finding per history config id that has no paired query.
+
+    Args:
+        unknown: Config id to the rows that cited it.
+
+    Returns:
+        Findings sorted by config id.
+    """
     return [
         Finding(
             kinds.HISTORY_UNKNOWN_CONFIG,
@@ -492,6 +678,17 @@ def _unknown_history(unknown: dict[str, list[HistoryRecord]]) -> list[Finding]:
 
 
 def _mismatched_history(mismatched: dict[str, list[HistoryRecord]]) -> list[Finding]:
+    """Build one finding per config whose history destination differs.
+
+    Comparison uses ``dataset.table``. The message quotes the paired query's
+    destination.
+
+    Args:
+        mismatched: Config id to the rows that disagree.
+
+    Returns:
+        Findings sorted by config id.
+    """
     findings: list[Finding] = []
     for config_id, rows in sorted(mismatched.items()):
         query = rows[0].query

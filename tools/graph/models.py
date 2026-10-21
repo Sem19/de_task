@@ -18,17 +18,39 @@ Relation = Literal["reads", "writes", "consumes"]
 
 
 def table_id(dataset_table: str) -> str:
-    """Node id for a ``dataset.table`` identity."""
+    """Return the node id for a ``dataset.table`` identity.
+
+    Args:
+        dataset_table: Join key. A project is not part of the id.
+
+    Returns:
+        ``table:<dataset.table>``.
+    """
     return f"table:{dataset_table}"
 
 
 def query_id(config_id: str) -> str:
-    """Node id for a scheduled query."""
+    """Return the node id for a scheduled query.
+
+    Args:
+        config_id: Transfer-config id.
+
+    Returns:
+        ``query:<config_id>``.
+    """
     return f"query:{config_id}"
 
 
 def consumer_id(kind: str, consumer: str) -> str:
-    """Node id for a dashboard or ad-hoc consumer."""
+    """Return the node id for a dashboard or ad-hoc consumer.
+
+    Args:
+        kind: Consumer kind, such as ``dashboard`` or ``adhoc``.
+        consumer: Consumer id from the usage file.
+
+    Returns:
+        ``consumer:<kind>:<consumer>``.
+    """
     return f"consumer:{kind}:{consumer}"
 
 
@@ -80,6 +102,13 @@ class Graph(NamedTuple):
 
     def node(self, node_id: str) -> Node:
         """Return one node.
+
+        Args:
+            node_id: Id produced by :func:`table_id`, :func:`query_id`, or
+                :func:`consumer_id`.
+
+        Returns:
+            The matching node.
 
         Raises:
             KeyError: ``node_id`` is not in the graph.

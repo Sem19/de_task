@@ -85,6 +85,20 @@ def _walk(
     forward: bool,
     include_uncertain: bool,
 ) -> tuple[str, ...]:
+    """Walk ancestors or descendants and return them sorted.
+
+    Args:
+        graph: Dependency graph.
+        node_id: Start node. It is not included.
+        forward: ``True`` walks descendants. ``False`` walks ancestors.
+        include_uncertain: Follow recovered reads.
+
+    Returns:
+        Sorted node ids, excluding ``node_id``.
+
+    Raises:
+        KeyError: ``node_id`` is not in the graph.
+    """
     digraph = dependency_digraph(graph, include_uncertain=include_uncertain)
     if node_id not in digraph:
         raise KeyError(f"unknown graph node: {node_id}")

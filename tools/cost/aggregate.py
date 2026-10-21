@@ -77,8 +77,9 @@ def frequency_of(schedule: str | None) -> str:
         schedule: Schedule text from the transfer config.
 
     Returns:
-        ``hourly`` when the text mentions hours, otherwise ``daily`` when it
-        mentions days, otherwise ``other``.
+        ``hourly`` when the lowercased text contains ``hour``. Otherwise
+        ``daily`` when it contains ``day``. Otherwise ``other``. ``None``
+        is ``other``. A text that contains both words is hourly.
     """
     text = (schedule or "").lower()
     if "hour" in text:
@@ -89,6 +90,17 @@ def frequency_of(schedule: str | None) -> str:
 
 
 def _price_history(row: HistoryRecord, duplicate_ids: set[str]) -> RunCost:
+    """Price one history row.
+
+    A blank run id is not treated as a duplicate.
+
+    Args:
+        row: One run-history record. A missing cell is read as an empty string.
+        duplicate_ids: Stripped run ids that occur more than once.
+
+    Returns:
+        The priced execution, including rows that cannot be priced.
+    """
     raw = row.raw
     run_id = raw.get("run_id", "")
     return price_run(
@@ -104,6 +116,14 @@ def _price_history(row: HistoryRecord, duplicate_ids: set[str]) -> RunCost:
 
 
 def _duplicate_run_ids(history: tuple[HistoryRecord, ...]) -> set[str]:
+    """Return run ids that appear more than once.
+
+    Args:
+        history: History rows. A blank run id is ignored.
+
+    Returns:
+        The stripped ids whose count is greater than one.
+    """
     counts: dict[str, int] = defaultdict(int)
     for row in history:
         run_id = row.raw.get("run_id", "").strip()
@@ -118,6 +138,23 @@ def _config_cost(
     runs: list[RunCost],
     inventory: Inventory,
 ) -> ConfigCost:
+    """Build one config's observed totals and its own daily rate.
+
+    The rate is published only when every run has a price and a schedule
+    date and at least one date was observed. Recorded and billed byte sums
+    stay ``None`` when any run is missing that figure. A config with no
+    runs has no historical cost and is missing cost evidence.
+
+    Args:
+        config_id: History or query id.
+        query: Paired query, or ``None`` when history names an unknown id.
+        runs: Priced executions for this config.
+        inventory: Estate root, used to make the SQL path relative.
+
+    Returns:
+        The config estimate. ``observed_priced_cost_usd`` is zero when no
+        execution could be priced.
+    """
     dates = tuple(
         sorted({run.schedule_date for run in runs if run.schedule_date is not None})
     )
@@ -174,6 +211,20 @@ def _estate_cost(
     runs: tuple[RunCost, ...],
     configs: tuple[ConfigCost, ...],
 ) -> EstateCost:
+    """Sum per-config rates into estate totals.
+
+    The published daily totals stay ``None`` when any recorded execution
+    lacks a price or a schedule date. Configs with no history do not clear
+    those totals. An empty history publishes zeros.
+
+    Args:
+        inventory: Loaded estate. ``query_count`` is the number of paired queries.
+        runs: Every priced execution.
+        configs: Every config estimate, already ranked.
+
+    Returns:
+        Estate totals, frequency slices, and enabled-state slices.
+    """
     priced_cost = sum_published([config.observed_priced_cost_usd for config in configs])
     rates = [
         config.normalized_daily_run_rate_usd
@@ -227,6 +278,16 @@ def _estate_cost(
 def _slices(
     configs: tuple[ConfigCost, ...], labels: tuple[str, ...], label_of
 ) -> tuple[SliceCost, ...]:
+    """Group configs into slices, keeping the known labels in order.
+
+    Args:
+        configs: Config estimates.
+        labels: Slice names that are always emitted, even when empty.
+        label_of: Maps a config to its slice name.
+
+    Returns:
+        One slice per known label, then any extra label in sorted order.
+    """
     grouped: dict[str, list[ConfigCost]] = {label: [] for label in labels}
     for config in configs:
         label = label_of(config)
@@ -237,6 +298,18 @@ def _slices(
 
 
 def _slice(label: str, configs: list[ConfigCost]) -> SliceCost:
+    """Sum one slice.
+
+    Configs without a published rate still add their observed priced cost.
+    The normalized totals sum only configs that have the matching rate.
+
+    Args:
+        label: Slice name.
+        configs: Configs already assigned to this slice.
+
+    Returns:
+        The slice. Both normalized totals are zero when no config has a rate.
+    """
     rated = [
         config for config in configs if config.normalized_daily_run_rate_usd is not None
     ]
@@ -268,12 +341,31 @@ def _slice(label: str, configs: list[ConfigCost]) -> SliceCost:
 
 
 def _per_day(num_bytes: int | None, days: int) -> Decimal | None:
+    """Return tebibytes per day.
+
+    Args:
+        num_bytes: Byte count, or ``None`` when the sum is incomplete.
+        days: Distinct schedule dates.
+
+    Returns:
+        The quotient, or ``None`` when the byte count is missing or ``days``
+        is not positive.
+    """
     if num_bytes is None or days <= 0:
         return None
     return divide(num_bytes, days * BYTES_PER_TIB)
 
 
 def _span(dates: tuple[date, ...]) -> tuple[int | None, bool | None]:
+    """Return the inclusive calendar span and whether the dates have no gaps.
+
+    Args:
+        dates: Distinct dates in ascending order. The last date is the end.
+
+    Returns:
+        ``(span, contiguous)``. Both are ``None`` when ``dates`` is empty.
+        ``contiguous`` is true when the span equals the number of dates.
+    """
     if not dates:
         return None, None
     span = (dates[-1] - dates[0]).days + 1
@@ -281,12 +373,30 @@ def _span(dates: tuple[date, ...]) -> tuple[int | None, bool | None]:
 
 
 def _destination(query: ScheduledQuery | None) -> str | None:
+    """Return the query destination as ``dataset.table``.
+
+    Args:
+        query: Paired query, or ``None``.
+
+    Returns:
+        The join key, or ``None`` when the query or its destination is missing.
+    """
     if query is None or query.destination is None:
         return None
     return query.destination.dataset_table
 
 
 def _sql_path(inventory: Inventory, query: ScheduledQuery | None) -> str | None:
+    """Return the SQL path relative to the estate root.
+
+    Args:
+        inventory: Loaded estate. Its root is the relative base.
+        query: Paired query, or ``None``.
+
+    Returns:
+        The path with forward slashes, or ``None`` when there is no query.
+        A file outside the estate root is returned as stored.
+    """
     if query is None:
         return None
     try:
@@ -296,6 +406,14 @@ def _sql_path(inventory: Inventory, query: ScheduledQuery | None) -> str | None:
 
 
 def _enabled_label(config: ConfigCost) -> str:
+    """Return the enabled-state slice name.
+
+    Args:
+        config: One config estimate.
+
+    Returns:
+        ``enabled``, ``disabled``, or ``unknown`` when ``enabled`` is ``None``.
+    """
     if config.enabled is True:
         return "enabled"
     if config.enabled is False:
@@ -304,9 +422,26 @@ def _enabled_label(config: ConfigCost) -> str:
 
 
 def _run_sort_key(run: RunCost) -> tuple[str, str, str]:
+    """Return the history order for one priced execution.
+
+    Args:
+        run: Priced execution. A missing time or run id sorts as empty.
+
+    Returns:
+        ``(config_id, schedule_time, run_id)``.
+    """
     return (run.config_id, run.schedule_time or "", run.run_id or "")
 
 
 def _rank_key(config: ConfigCost) -> tuple[bool, Decimal, str]:
+    """Return the rank order for one config.
+
+    Args:
+        config: Config estimate.
+
+    Returns:
+        Unpriced configs after priced ones, then descending daily rate,
+        then config id.
+    """
     rate = config.normalized_daily_run_rate_usd
     return (rate is None, -(rate or Decimal(0)), config.config_id)

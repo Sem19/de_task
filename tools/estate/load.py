@@ -87,4 +87,12 @@ def load_inventory(root: Path) -> Inventory:
 
 
 def _finding_order(finding: Finding) -> tuple[str, str, str]:
+    """Return the sort key for inventory findings.
+
+    Args:
+        finding: One source finding. A missing config id sorts as empty.
+
+    Returns:
+        ``(kind, config_id, message)``.
+    """
     return (finding.kind, finding.config_id or "", finding.message)

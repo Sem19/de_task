@@ -149,7 +149,18 @@ def load_transfer_configs(path: Path) -> tuple[list[TransferConfig], list[Findin
 
 
 def transfer_config(raw: dict[str, Any]) -> TransferConfig:
-    """Copy mapping fields off one transfer-config object. ``raw`` is kept as-is."""
+    """Copy mapping fields off one transfer-config object.
+
+    Blank strings become ``None``. ``disabled`` is kept only when it is a
+    boolean. ``raw`` is the original object.
+
+    Args:
+        raw: One object from ``transfer_configs.json``.
+
+    Returns:
+        The copied config. A ``name`` that does not yield a config id leaves
+        ``config_id`` as ``None``.
+    """
     name = raw.get("name")
     transfer_name = name if isinstance(name, str) else None
     config_id: str | None = None
@@ -181,7 +192,15 @@ def transfer_config(raw: dict[str, Any]) -> TransferConfig:
 
 
 def incomplete_fields(config: TransferConfig) -> list[str]:
-    """Return the mapping fields that are absent, in a stable order."""
+    """Return the mapping fields that are absent.
+
+    Args:
+        config: One transfer config.
+
+    Returns:
+        Field names in ``_CONFIG_FIELDS`` order. An empty list means every
+        required mapping field was present.
+    """
     values = {
         "name": config.config_id,
         "destinationDatasetId": config.destination_dataset,
@@ -234,6 +253,9 @@ def load_usage(
         path: ``downstream_usage.csv``.
         by_id: Queries keyed by config_id.
         writers: Writer config ids keyed by ``dataset.table``.
+
+    Returns:
+        Usage records in file order.
     """
     rows: list[UsageRecord] = []
     for raw in load_csv(path, USAGE_COLUMNS):
@@ -321,6 +343,20 @@ def load_schemas(
 
 
 def _schema_columns(path: Path, key: str, columns: object) -> tuple[SchemaColumn, ...]:
+    """Parse one schema entry into columns.
+
+    Args:
+        path: ``schemas.json``, named in errors.
+        key: Schema key, named in errors.
+        columns: The JSON value for that key.
+
+    Returns:
+        Columns in file order.
+
+    Raises:
+        EstateInputError: The value is not a list of objects with string
+            ``name`` and ``type``.
+    """
     if not isinstance(columns, list):
         raise EstateInputError(f"{path}: schema for {key} must be a list")
     parsed: list[SchemaColumn] = []
@@ -338,6 +374,14 @@ def _schema_columns(path: Path, key: str, columns: object) -> tuple[SchemaColumn
 
 
 def _text(value: object) -> str | None:
+    """Return a non-empty string, or ``None`` for any other JSON value.
+
+    Args:
+        value: A field from a transfer config.
+
+    Returns:
+        The string, or ``None`` when the value is missing, blank, or not a string.
+    """
     if isinstance(value, str) and value != "":
         return value
     return None

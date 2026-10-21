@@ -42,6 +42,9 @@ def bytes_to_tib(num_bytes: int) -> Decimal:
 
     Returns:
         The exact Decimal number of TiB.
+
+    Raises:
+        ValueError: ``num_bytes`` is negative.
     """
     if num_bytes < 0:
         raise ValueError("num_bytes must be >= 0")
@@ -56,6 +59,9 @@ def cost_usd(billed_bytes: int) -> Decimal:
 
     Returns:
         Estimated USD for those bytes.
+
+    Raises:
+        ValueError: ``billed_bytes`` is negative.
     """
     if billed_bytes < 0:
         raise ValueError("billed_bytes must be >= 0")
@@ -72,6 +78,9 @@ def present_usd(amount: Decimal, places: int = 2) -> Decimal:
 
     Returns:
         ``amount`` quantized with half-up rounding.
+
+    Raises:
+        ValueError: ``places`` is negative.
     """
     if places < 0:
         raise ValueError("places must be >= 0")
@@ -90,6 +99,11 @@ def estimate_billed_bytes(state: str, recorded_bytes: int) -> tuple[int, str]:
     Returns:
         Estimated billed bytes and a qualification. The qualification is
         empty when a successful scan is already at or above the minimum.
+        A failed execution, a successful zero-byte execution, and any other
+        state are estimated at zero billed bytes.
+
+    Raises:
+        ValueError: ``recorded_bytes`` is negative.
     """
     if recorded_bytes < 0:
         raise ValueError("recorded_bytes must be >= 0")
@@ -172,6 +186,15 @@ def price_run(
 
 
 def _parse_bytes(value: str) -> tuple[int | None, str]:
+    """Parse a recorded byte count, or explain why it cannot be used.
+
+    Args:
+        value: ``total_bytes_processed`` text. Surrounding space is ignored.
+
+    Returns:
+        The non-negative count and an empty note, or ``None`` and a note
+        for a blank, non-integer, or negative cell.
+    """
     text = value.strip()
     if not text:
         return None, "missing total_bytes_processed"
@@ -185,6 +208,15 @@ def _parse_bytes(value: str) -> tuple[int | None, str]:
 
 
 def _schedule_date(value: str) -> tuple[date | None, str]:
+    """Read the calendar date from a schedule timestamp.
+
+    Args:
+        value: ``schedule_time`` text. Surrounding space is ignored.
+
+    Returns:
+        The date component and an empty note, or ``None`` and a note when
+        the cell is blank or not ISO. An offset is not converted.
+    """
     text = value.strip()
     if not text:
         return None, "missing schedule_time"
@@ -196,6 +228,15 @@ def _schedule_date(value: str) -> tuple[date | None, str]:
 
 
 def _clock_note(label: str, value: str) -> str:
+    """Return a note when a clock cell is blank or not ISO.
+
+    Args:
+        label: Field name written into the note.
+        value: Timestamp text. Surrounding space is ignored.
+
+    Returns:
+        An empty string when the text is a valid ISO timestamp.
+    """
     text = value.strip()
     if not text:
         return f"missing {label}"
@@ -234,5 +275,11 @@ def sum_published(amounts: Iterable[Decimal]) -> Decimal:
 
 
 def _append(notes: list[str], note: str) -> None:
+    """Append ``note`` when it is not empty.
+
+    Args:
+        notes: Mutable qualification notes.
+        note: One limit. An empty string is skipped.
+    """
     if note:
         notes.append(note)

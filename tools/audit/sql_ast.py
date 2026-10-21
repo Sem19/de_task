@@ -129,7 +129,18 @@ def merge_schemas(schemas: tuple[NameStatus, ...] | list[NameStatus]) -> NameSta
 
 
 def column_state(schema: NameStatus, name: str) -> ColumnState:
-    """Classify one output name. Unknown means the star was not expanded."""
+    """Classify one output name against a writer schema.
+
+    Unknown means the star was not expanded, so the name is neither proven
+    present nor proven absent.
+
+    Args:
+        schema: One writer, or the merge of several writers.
+        name: Column name the reader uses.
+
+    Returns:
+        ``present``, ``absent``, ``conflict``, or ``unknown``.
+    """
     if name in schema.present and name not in schema.absent:
         return "present"
     if name in schema.absent:
@@ -266,6 +277,15 @@ def partition_coverage(
 
 
 def _root(sql: str) -> exp.Expression | None:
+    """Parse BigQuery SQL and return the last statement, unwrapped.
+
+    Args:
+        sql: Scheduled-query text.
+
+    Returns:
+        The last statement, or ``None`` when parsing fails or the script
+        is empty.
+    """
     try:
         trees = [
             tree for tree in sqlglot.parse(sql, read="bigquery") if tree is not None
@@ -278,6 +298,14 @@ def _root(sql: str) -> exp.Expression | None:
 
 
 def _unwrap(node: exp.Expression) -> exp.Expression:
+    """Drop subquery and parenthesis wrappers, and step into ``CREATE``.
+
+    Args:
+        node: A parsed statement.
+
+    Returns:
+        The expression whose select list is the scheduled result.
+    """
     current = node
     while isinstance(current, (exp.Subquery, exp.Paren)):
         current = current.this
@@ -287,6 +315,15 @@ def _unwrap(node: exp.Expression) -> exp.Expression:
 
 
 def _count_output(node: exp.Expression) -> int | None:
+    """Return the outer select width, or ``None`` when it is not fixed.
+
+    Args:
+        node: Unwrapped statement. UNION branches must agree. A star or an
+            empty list is unknown. Anything other than a select is unknown.
+
+    Returns:
+        The number of outer expressions, or ``None``.
+    """
     if isinstance(node, exp.Union):
         left = _count_output(node.this)
         right = _count_output(node.expression)
@@ -305,6 +342,17 @@ def _count_output(node: exp.Expression) -> int | None:
 def _schema(
     node: exp.Expression, resolve: Callable[[str], NameStatus | None] | None
 ) -> NameStatus:
+    """Derive output names for one select or union.
+
+    Args:
+        node: Unwrapped statement.
+        resolve: Maps ``dataset.table`` to a known status so one unqualified
+            star can be expanded. ``None`` skips expansion.
+
+    Returns:
+        The output status. A non-select, or a UNION whose branches are not
+        both closed and the same width, is :data:`EMPTY_STATUS`.
+    """
     if isinstance(node, exp.Union):
         left = _schema(node.this, resolve)
         right = _schema(node.expression, resolve)
@@ -345,6 +393,17 @@ def _schema(
 def _expand(
     explicit: frozenset[str], except_names: frozenset[str], source: NameStatus
 ) -> NameStatus:
+    """Apply ``EXCEPT`` and a resolved star to an explicit select list.
+
+    Args:
+        explicit: Names written beside the star.
+        except_names: Names removed by ``EXCEPT``.
+        source: Schema resolved for the star's one source table.
+
+    Returns:
+        A closed status when the source is closed, a covered status when
+        the source is covered, otherwise an open status.
+    """
     absent = (except_names - explicit) | (source.absent - explicit)
     present = set(explicit) | (set(source.present) - set(except_names))
     if source.closed:
@@ -361,6 +420,16 @@ def _expand(
 
 
 def _star_source(select: exp.Select, alias: str | None) -> str | None:
+    """Return the physical ``dataset.table`` a star reads, if it is unique.
+
+    Args:
+        select: Select that contains the star.
+        alias: Table alias on ``alias.*``. ``None`` is an unqualified star,
+            which binds only when the select has one table and no join.
+
+    Returns:
+        ``dataset.table``, or ``None`` when the source is not a single table.
+    """
     tables = _select_tables(select)
     if alias:
         for name, key in tables:
@@ -373,6 +442,15 @@ def _star_source(select: exp.Select, alias: str | None) -> str | None:
 
 
 def _select_tables(select: exp.Select) -> list[tuple[str, str]]:
+    """List physical tables in the select's ``FROM`` and ``JOIN`` clauses.
+
+    Args:
+        select: One select. Nested selects are not walked.
+
+    Returns:
+        ``(alias or table name, dataset.table)`` in clause order. A table
+        without both dataset and name is omitted.
+    """
     nodes: list[exp.Expression] = []
     from_ = select.args.get("from_")
     if from_ is not None:
@@ -389,18 +467,43 @@ def _select_tables(select: exp.Select) -> list[tuple[str, str]]:
 
 
 def _dataset_table(table: exp.Table) -> str | None:
+    """Return ``dataset.table`` for a physical table node.
+
+    Args:
+        table: sqlglot table. The project, if present, is not included.
+
+    Returns:
+        ``dataset.table``, or ``None`` when the dataset or name is missing.
+    """
     if not table.db or not table.name:
         return None
     return f"{table.db}.{table.name}"
 
 
 def _is_star(expression: exp.Expression) -> bool:
+    """Return whether a select-list item is a star, including ``EXCEPT``.
+
+    Args:
+        expression: One outer select-list expression.
+
+    Returns:
+        ``True`` for ``*`` and ``alias.*``.
+    """
     return _star_info(expression) is not None
 
 
 def _star_info(
     expression: exp.Expression,
 ) -> tuple[str | None, frozenset[str], bool] | None:
+    """Describe a star in the select list.
+
+    Args:
+        expression: One select-list expression.
+
+    Returns:
+        ``(alias, EXCEPT names, opaque)``. ``opaque`` is true when the star
+        uses ``REPLACE`` or ``RENAME``. ``None`` when the item is not a star.
+    """
     star: exp.Star | None = None
     alias: str | None = None
     if isinstance(expression, exp.Star):
@@ -420,6 +523,15 @@ def _star_info(
 
 
 def _output_name(expression: exp.Expression) -> str | None:
+    """Return the output name of an alias or a plain column.
+
+    Args:
+        expression: One select-list expression.
+
+    Returns:
+        The alias, or the column name. ``None`` for expressions that do not
+        name themselves.
+    """
     if isinstance(expression, exp.Alias) and expression.alias:
         return expression.alias
     if isinstance(expression, exp.Column) and not isinstance(expression.this, exp.Star):
@@ -428,6 +540,15 @@ def _output_name(expression: exp.Expression) -> str | None:
 
 
 def _accumulate_columns(tree: exp.Expression, found: dict[str, set[str]]) -> None:
+    """Add qualified column reads to ``found``, keyed by ``dataset.table``.
+
+    Partition pseudo-columns are skipped. An unqualified star's ``EXCEPT``
+    names are recorded only when the scope has one physical table.
+
+    Args:
+        tree: One parsed statement, qualified when that succeeded.
+        found: Mutable map updated in place.
+    """
     for scope in traverse_scope(tree):
         alias_map = _scope_tables(scope)
         for column in scope.columns:
@@ -454,6 +575,15 @@ def _accumulate_columns(tree: exp.Expression, found: dict[str, set[str]]) -> Non
 
 
 def _scope_tables(scope: object) -> dict[str, str]:
+    """Map scope aliases to ``dataset.table``.
+
+    Args:
+        scope: A sqlglot scope. Sources that are not physical tables are
+            ignored.
+
+    Returns:
+        Alias, table alias, and bare table name to ``dataset.table``.
+    """
     found: dict[str, str] = {}
     sources = getattr(scope, "sources", {})
     for alias, source in sources.items():
@@ -469,6 +599,14 @@ def _scope_tables(scope: object) -> dict[str, str]:
 
 
 def _outer_wheres(node: exp.Expression) -> list[exp.Where]:
+    """Return WHERE clauses of the outer select, including UNION branches.
+
+    Args:
+        node: Unwrapped statement.
+
+    Returns:
+        Outer WHERE nodes. Nested selects are not included.
+    """
     if isinstance(node, exp.Select):
         where = node.args.get("where")
         return [where] if isinstance(where, exp.Where) else []
@@ -478,6 +616,14 @@ def _outer_wheres(node: exp.Expression) -> list[exp.Where]:
 
 
 def _branch_retentions(node: exp.Expression) -> list[Retention]:
+    """Return the lookback of each outer branch.
+
+    Args:
+        node: Unwrapped statement. A non-select is uncertain.
+
+    Returns:
+        One :class:`Retention` per UNION branch, or one for a single select.
+    """
     if isinstance(node, exp.Union):
         return _branch_retentions(node.this) + _branch_retentions(node.expression)
     if isinstance(node, exp.Select):
@@ -489,6 +635,17 @@ def _branch_retentions(node: exp.Expression) -> list[Retention]:
 
 
 def _where_retention(where: exp.Where) -> Retention:
+    """Read a simple lower-bound lookback from one WHERE.
+
+    An ``OR``, or a date shift that is not a lower bound, is uncertain.
+    Several lower bounds collapse to the smallest day count.
+
+    Args:
+        where: One outer WHERE.
+
+    Returns:
+        The lookback. No date predicate is a certain result with no days.
+    """
     if where.find(exp.Or):
         return Retention(None, True)
     days: list[int] = []
@@ -504,12 +661,34 @@ def _where_retention(where: exp.Where) -> Retention:
 
 
 def _conjuncts(node: exp.Expression) -> list[exp.Expression]:
+    """Split an ``AND`` chain into its predicates.
+
+    Args:
+        node: A boolean expression.
+
+    Returns:
+        The leaves, in source order. A non-``AND`` node is a one-item list.
+    """
     if isinstance(node, exp.And):
         return _conjuncts(node.this) + _conjuncts(node.expression)
     return [node]
 
 
 def _predicate_days(predicate: exp.Expression) -> int | Literal["opaque", "other"]:
+    """Classify one comparison as a day count, unrelated, or opaque.
+
+    A lower bound is ``column >`` or ``>=`` a current date minus ``n`` days, or
+    that date on the left of ``<`` or ``<=``. Both sides being day counts, or
+    a date shift in another shape, is opaque. A day count on the wrong side
+    of the comparison is ``"other"``.
+
+    Args:
+        predicate: One conjunct.
+
+    Returns:
+        A non-negative day count, ``"other"`` when the predicate is not a
+        date bound, or ``"opaque"`` when a date shift is not that pattern.
+    """
     if not isinstance(predicate, (exp.GT, exp.GTE, exp.LT, exp.LTE)):
         return "opaque" if _has_date_shift(predicate) else "other"
     left = _exact_lookback(predicate.this)
@@ -528,6 +707,18 @@ def _predicate_days(predicate: exp.Expression) -> int | Literal["opaque", "other
 
 
 def _exact_lookback(node: exp.Expression) -> int | Literal["opaque", "no"]:
+    """Return the day count of a current date, timestamp, or datetime minus ``n`` days.
+
+    Adding a negative day interval is the same shape. Any other date shift
+    is opaque. Parentheses are ignored.
+
+    Args:
+        node: One side of a comparison.
+
+    Returns:
+        The day count, ``"no"`` when this side is not a date shift, or
+        ``"opaque"`` when the shift is not a whole number of days.
+    """
     current: exp.Expression | None = node
     while isinstance(current, exp.Paren):
         current = current.this
@@ -547,6 +738,15 @@ def _exact_lookback(node: exp.Expression) -> int | Literal["opaque", "no"]:
 
 
 def _day_literal(node: exp.Expression) -> int | None:
+    """Return the signed integer on a ``DAY`` interval, if it is a literal.
+
+    Args:
+        node: A date or timestamp add or subtract.
+
+    Returns:
+        The day count, including a leading minus, or ``None`` when the unit
+        is not ``DAY`` or the amount is not an integer literal.
+    """
     unit = node.args.get("unit")
     unit_name = unit.name.upper() if isinstance(unit, exp.Var) else ""
     if unit_name != "DAY":
@@ -565,6 +765,14 @@ def _day_literal(node: exp.Expression) -> int | None:
 
 
 def _has_date_shift(node: exp.Expression) -> bool:
+    """Return whether ``node`` contains a date add, subtract, or interval.
+
+    Args:
+        node: Expression to search, including itself.
+
+    Returns:
+        ``True`` when any date-shift node is present.
+    """
     return (
         node.find(exp.DateSub) is not None
         or node.find(exp.TimestampSub) is not None
@@ -577,6 +785,14 @@ def _has_date_shift(node: exp.Expression) -> bool:
 
 
 def _filter_columns(scope: object) -> list[exp.Column]:
+    """Return columns named in this scope's WHERE and JOIN ON clauses.
+
+    Args:
+        scope: A sqlglot scope. Select-list and ORDER BY columns are excluded.
+
+    Returns:
+        Column nodes. A scope without an expression returns an empty list.
+    """
     expression = getattr(scope, "expression", None)
     if expression is None:
         return []
@@ -601,6 +817,20 @@ def _bind_partition(
     tables: set[str],
     status: dict[str, str],
 ) -> None:
+    """Mark partitioned sources this column filters, in place.
+
+    A qualified column updates only its table. An unqualified column that
+    matches one source marks it filtered. Matching more than one source marks
+    those still-unfiltered sources ambiguous.
+
+    Args:
+        column: A column from a WHERE or ON clause.
+        alias_map: Scope alias to ``dataset.table``.
+        partitioned: ``dataset.table`` to its catalog partition column.
+        tables: Partitioned sources visible in this scope.
+        status: Mutable ``dataset.table`` to ``filtered``, ``unfiltered``,
+            or ``ambiguous``.
+    """
     if column.table:
         key = alias_map.get(column.table)
         if key in tables and _partition_match(column.name, partitioned[key]):
@@ -619,6 +849,18 @@ def _bind_partition(
 
 
 def _partition_match(column_name: str, partition_column: str) -> bool:
+    """Return whether a column name is the catalog partition column.
+
+    Args:
+        column_name: Name as written in the SQL.
+        partition_column: Catalog partition column. The uppercase names
+            ``_PARTITIONTIME`` and ``_PARTITIONDATE`` match either SQL name,
+            ignoring the SQL name's case. Any other catalog name must match
+            exactly.
+
+    Returns:
+        ``True`` when the names refer to the same partition column.
+    """
     if partition_column in _PSEUDO:
         return column_name.upper() in _PSEUDO
     return column_name == partition_column

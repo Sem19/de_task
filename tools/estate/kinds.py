@@ -28,5 +28,13 @@ SCHEMA_NOT_IN_CATALOG = "schema_not_in_catalog"
 
 
 def count_label(count: int, noun: str) -> str:
-    """Format a count for a finding message, including a singular noun."""
+    """Format a count for a finding message.
+
+    Args:
+        count: Number of rows or files.
+        noun: Singular noun. A count other than 1 appends ``s``.
+
+    Returns:
+        ``"1 row"`` or ``"2 rows"``.
+    """
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"

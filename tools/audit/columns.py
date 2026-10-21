@@ -70,6 +70,18 @@ def column_findings(
 
 
 def _schemas(by_id: dict[str, ScheduledQuery], graph: Graph) -> dict[str, NameStatus]:
+    """Derive each query's output names, expanding a star from its writers.
+
+    A query whose SQL does not parse is omitted. Expansion repeats until a
+    pass changes nothing, or one more pass than the number of parsed queries.
+
+    Args:
+        by_id: Paired queries keyed by config id.
+        graph: Certain write edges name the writers used to expand a star.
+
+    Returns:
+        Config id to output-name status. Unparsed queries are absent.
+    """
     schemas: dict[str, NameStatus] = {}
     for query in by_id.values():
         direct = output_schema(query.sql_text)
@@ -82,6 +94,16 @@ def _schemas(by_id: dict[str, ScheduledQuery], graph: Graph) -> dict[str, NameSt
         updated = dict(schemas)
 
         def resolve(config_id: str, table: str) -> NameStatus | None:
+            """Merge other writers of ``table``, skipping this query.
+
+            Args:
+                config_id: Query whose star is being expanded.
+                table: ``dataset.table`` named by that star.
+
+            Returns:
+                The merged writer schema, or ``None`` when no other parsed
+                writer is known yet.
+            """
             ids = [
                 writer
                 for writer in writers.get(table, ())
@@ -108,6 +130,19 @@ def _schemas(by_id: dict[str, ScheduledQuery], graph: Graph) -> dict[str, NameSt
 def _split_writers(
     schemas: dict[str, NameStatus], writer_ids: tuple[str, ...], name: str
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Split writers into those that project ``name`` and those that omit it.
+
+    A writer whose state is neither present nor absent is left out of both
+    groups.
+
+    Args:
+        schemas: Output status keyed by writer config id.
+        writer_ids: Writers of one destination, already known to have a schema.
+        name: Column the reader uses.
+
+    Returns:
+        Present config ids, then absent config ids, each in writer order.
+    """
     present = []
     missing = []
     for config_id in writer_ids:
@@ -123,6 +158,15 @@ def _absent_finding(
     by_id: dict[str, ScheduledQuery],
     pairs: list[tuple[str, str, str, tuple[str, ...]]],
 ) -> AuditFinding:
+    """Build the finding for columns every checked-in writer omits.
+
+    Args:
+        by_id: Paired queries keyed by config id.
+        pairs: ``(reader, column, table, writer ids)`` for definite omissions.
+
+    Returns:
+        ``CR-COLUMN-NOT-PROJECTED`` at needs_verification.
+    """
     ids = {reader for reader, _name, _table, writers in pairs} | {
         writer for _reader, _name, _table, writers in pairs for writer in writers
     }
@@ -151,6 +195,15 @@ def _conflict_finding(
     by_id: dict[str, ScheduledQuery],
     pairs: list[tuple[str, str, str, tuple[str, ...], tuple[str, ...]]],
 ) -> AuditFinding:
+    """Build the finding for columns the writers do not all project.
+
+    Args:
+        by_id: Paired queries keyed by config id.
+        pairs: ``(reader, column, table, present writers, missing writers)``.
+
+    Returns:
+        ``CR-COLUMN-WRITER-CONFLICT`` at needs_verification.
+    """
     ids = {reader for reader, *_rest in pairs}
     for _reader, _name, _table, present, missing in pairs:
         ids.update(present)

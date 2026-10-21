@@ -78,6 +78,17 @@ def _duplicate_writers(
     graph: Graph,
     by_id: dict[str, ScheduledQuery],
 ) -> list[AuditFinding]:
+    """Report each table that more than one scheduled query writes.
+
+    Args:
+        inventory: Used only to note whether a shared-destination finding exists.
+        graph: Certain write edges define the writers.
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        One confirmed finding per table, in the order ``duplicate_writers``
+        returns the tables.
+    """
     findings = []
     for table_node, writers in duplicate_writers(graph):
         config_ids = tuple(writer.removeprefix("query:") for writer in writers)
@@ -112,6 +123,15 @@ def _duplicate_writers(
 
 
 def _cycles(graph: Graph, by_id: dict[str, ScheduledQuery]) -> list[AuditFinding]:
+    """Report components that contain at least two scheduled queries.
+
+    Args:
+        graph: Certain edges. A self-read of one query is not a cycle here.
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        One confirmed finding per component.
+    """
     findings = []
     for component in strongly_connected(graph):
         config_ids = tuple(
@@ -151,6 +171,15 @@ def _cycles(graph: Graph, by_id: dict[str, ScheduledQuery]) -> list[AuditFinding
 
 
 def _self_reads(graph: Graph, by_id: dict[str, ScheduledQuery]) -> list[AuditFinding]:
+    """Report queries that read a table they also write.
+
+    Args:
+        graph: Certain read and write edges.
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        One confirmed finding per self-reading query.
+    """
     findings = []
     for node_id in self_reads(graph):
         config_id = node_id.removeprefix("query:")
@@ -178,6 +207,17 @@ def _unparseable(
     graph: Graph,
     by_id: dict[str, ScheduledQuery],
 ) -> list[AuditFinding]:
+    """Report scheduled SQL that sqlglot cannot parse, as one finding.
+
+    Args:
+        inventory: History states are counted per failing config id.
+        parsed: Parse results keyed by config id. Each failure must be present.
+        graph: Query nodes with ``parsed is False``.
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        A one-item list, or an empty list when every query parsed.
+    """
     failed = parse_failures(graph)
     if not failed:
         return []
@@ -217,6 +257,15 @@ def _unparseable(
 def _resources_exceeded(
     inventory: Inventory, by_id: dict[str, ScheduledQuery]
 ) -> list[AuditFinding]:
+    """Report history rows whose error starts with ``Resources exceeded``.
+
+    Args:
+        inventory: Run history.
+        by_id: Paired queries keyed by config id. Unknown ids are omitted.
+
+    Returns:
+        One confirmed finding, or an empty list when no row matches.
+    """
     counts: dict[str, int] = defaultdict(int)
     for row in inventory.history:
         message = row.raw.get("error_message") or ""
@@ -244,6 +293,18 @@ def _resources_exceeded(
 def _row_number(
     inventory: Inventory, by_id: dict[str, ScheduledQuery]
 ) -> list[AuditFinding]:
+    """Report ``ROW_NUMBER`` windows that have no ``ORDER BY``.
+
+    SQL that does not parse is skipped. A query is cited once even if several
+    windows omit the order.
+
+    Args:
+        inventory: Paired queries and their SQL text.
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        One confirmed finding, or an empty list.
+    """
     hits = []
     for query in inventory.queries:
         if "ROW_NUMBER" not in query.sql_text.upper():
@@ -287,6 +348,18 @@ def _row_number(
 def _schema_counts(
     inventory: Inventory, by_id: dict[str, ScheduledQuery]
 ) -> list[AuditFinding]:
+    """Report destinations whose outer select width differs from the catalog.
+
+    Stars, empty lists, and disagreeing UNION branches are not counted, so
+    those queries are not mismatches.
+
+    Args:
+        inventory: Catalog column counts and paired SQL.
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        One indicated finding, or an empty list.
+    """
     catalog = {
         record.table.dataset_table: int(record.raw["columns"])
         for record in inventory.catalog
@@ -331,6 +404,14 @@ def _schema_counts(
 
 
 def _repeated_sql(by_id: dict[str, ScheduledQuery]) -> list[AuditFinding]:
+    """Report queries whose SQL matches after comments and whitespace are removed.
+
+    Args:
+        by_id: Paired queries keyed by config id.
+
+    Returns:
+        One confirmed finding per group of two or more copies.
+    """
     groups: dict[str, list[str]] = defaultdict(list)
     for query in by_id.values():
         groups[_normalize_sql(query.sql_text)].append(query.config_id)
@@ -361,6 +442,14 @@ def _repeated_sql(by_id: dict[str, ScheduledQuery]) -> list[AuditFinding]:
 
 
 def _state_counts(inventory: Inventory) -> dict[str, dict[str, int]]:
+    """Count history rows by config id and recorded state.
+
+    Args:
+        inventory: Run history. A missing state is counted as an empty string.
+
+    Returns:
+        Config id to ``{state: row count}``.
+    """
     counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in inventory.history:
         counts[row.config_id][row.raw.get("state", "")] += 1
@@ -368,6 +457,15 @@ def _state_counts(inventory: Inventory) -> dict[str, dict[str, int]]:
 
 
 def _normalize_sql(sql: str) -> str:
+    """Remove comments and collapse whitespace so copies can be compared.
+
+    Args:
+        sql: Scheduled-query text. It is not parsed.
+
+    Returns:
+        The text with block and line comments replaced and runs of whitespace
+        reduced to one space.
+    """
     text = _COMMENT_BLOCK.sub(" ", sql)
     text = _COMMENT_LINE.sub("", text)
     return _SPACE.sub(" ", text).strip()

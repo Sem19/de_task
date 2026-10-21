@@ -57,6 +57,14 @@ def render_cost(analysis: CostAnalysis) -> str:
 
 
 def _header(analysis: CostAnalysis) -> str:
+    """Return the title block.
+
+    Args:
+        analysis: Calculated analysis. Only ``source_name`` is printed.
+
+    Returns:
+        Lines joined with newlines. No timestamp is included.
+    """
     return "\n".join(
         [
             "COST",
@@ -71,6 +79,16 @@ def _header(analysis: CostAnalysis) -> str:
 
 
 def _executive(analysis: CostAnalysis) -> str:
+    """Return section 1, the totals and the first investigations.
+
+    Args:
+        analysis: Calculated analysis. A missing daily total prints as
+            ``unmeasured``. Conditional avoidable lines are only the
+            scenarios with that money role.
+
+    Returns:
+        The executive-summary section.
+    """
     estate = analysis.estate
     lines = [
         "1. Executive summary",
@@ -126,6 +144,15 @@ def _executive(analysis: CostAnalysis) -> str:
 
 
 def _methodology(analysis: CostAnalysis) -> str:
+    """Return section 2, the pricing rules and the slices.
+
+    Args:
+        analysis: Calculated analysis. Frequency and enabled slices are
+            printed in the order the engine supplied.
+
+    Returns:
+        The methodology section.
+    """
     estate = analysis.estate
     lines = [
         "2. Methodology",
@@ -171,6 +198,15 @@ def _methodology(analysis: CostAnalysis) -> str:
 
 
 def _top(analysis: CostAnalysis) -> str:
+    """Return section 3, the ranked configs the engine marked as the top.
+
+    Args:
+        analysis: Calculated analysis. ``top_configs`` is printed as given,
+            which is at most ten configs that have a daily rate.
+
+    Returns:
+        The contributor section.
+    """
     lines = [
         "3. Top 10 cost contributors",
         "Order is normalized daily cost descending, then config_id.",
@@ -182,6 +218,15 @@ def _top(analysis: CostAnalysis) -> str:
 
 
 def _recommendations(analysis: CostAnalysis) -> str:
+    """Return section 4, the recommendations and the driver evidence.
+
+    Args:
+        analysis: Calculated analysis.
+
+    Returns:
+        The recommendation section. ``None.`` is the whole body when there
+        are no recommendations, and the driver evidence is then omitted.
+    """
     lines = [
         "4. Prioritized engineering recommendations",
         _paragraph(
@@ -202,6 +247,15 @@ def _recommendations(analysis: CostAnalysis) -> str:
 
 
 def _recommendation(item: Recommendation) -> list[str]:
+    """Format one recommendation.
+
+    Args:
+        item: Recommendation. A missing dollar amount prints as ``unmeasured``.
+            The config line is omitted when ``config_ids`` is empty.
+
+    Returns:
+        Lines for this recommendation, without a trailing blank line.
+    """
     lines = [
         f"  {item.rank}. {item.heading}",
         f"    Observed daily query cost: {_usd(item.observed_daily_cost_usd)}",
@@ -217,6 +271,14 @@ def _recommendation(item: Recommendation) -> list[str]:
 
 
 def _review_block(review: DriverReview) -> list[str]:
+    """Format the evidence block for one reviewed driver.
+
+    Args:
+        review: Driver review. An empty finding list prints as ``none``.
+
+    Returns:
+        Lines for the evidence block.
+    """
     findings = ", ".join(review.finding_ids) or "none"
     return [
         f"  Evidence for {review.config_id}",
@@ -231,6 +293,14 @@ def _review_block(review: DriverReview) -> list[str]:
 
 
 def _cleanup(scenarios: tuple[Scenario, ...]) -> str:
+    """Return section 4a, the zero-scan cleanup scenarios.
+
+    Args:
+        scenarios: All scenarios. Only ``operational_cleanup`` is listed.
+
+    Returns:
+        The cleanup section. ``None.`` when that role is absent.
+    """
     chosen = [
         scenario
         for scenario in scenarios
@@ -252,6 +322,16 @@ def _cleanup(scenarios: tuple[Scenario, ...]) -> str:
 
 
 def _scenarios(scenarios: tuple[Scenario, ...]) -> str:
+    """Return section 5, grouped by how the money may be described.
+
+    Args:
+        scenarios: All scenarios. ``operational_cleanup`` is left to section 4a.
+            Empty groups are omitted.
+
+    Returns:
+        The scenario section. A note that nothing was priced is added when
+        none of the three printed roles is present.
+    """
     lines = [
         "5. Savings scenarios",
         "Scenarios are not additive. One query can appear in more than one.",
@@ -282,6 +362,15 @@ def _scenarios(scenarios: tuple[Scenario, ...]) -> str:
 
 
 def _scenario_block(scenario: Scenario) -> list[str]:
+    """Format one scenario and its members.
+
+    Args:
+        scenario: Priced scenario. Member amounts use four decimal places.
+            An empty retain list prints as ``none``.
+
+    Returns:
+        Lines for the scenario.
+    """
     retains = ", ".join(scenario.retains) or "none"
     label = _ROLE_LABEL[scenario.money_role]
     lines = [
@@ -305,6 +394,14 @@ def _scenario_block(scenario: Scenario) -> list[str]:
 
 
 def _route(route: RouteCost) -> str:
+    """Return section 6, the lineage route and the excluded siblings.
+
+    Args:
+        route: Priced route. Queries are printed in the order supplied.
+
+    Returns:
+        The route section.
+    """
     lines = [
         f"6. Lineage route for {route.table_name}",
         _paragraph(
@@ -334,6 +431,15 @@ def _route(route: RouteCost) -> str:
 
 
 def _findings(analysis: CostAnalysis) -> str:
+    """Return section 7, associated spend for each audit finding.
+
+    Args:
+        analysis: Calculated analysis. Reviewed drivers are listed before
+            the finding rows when reviews exist.
+
+    Returns:
+        The findings section. Stops after a note when no findings were supplied.
+    """
     lines = [
         "7. Audit findings and associated spend",
         _paragraph(
@@ -359,6 +465,16 @@ def _findings(analysis: CostAnalysis) -> str:
 
 
 def _finding_line(finding: FindingCost) -> str:
+    """Format one finding's associated spend.
+
+    Args:
+        finding: Finding cost. The daily amount uses four decimal places.
+            A missing-rate suffix is added only when some cited configs
+            have no rate.
+
+    Returns:
+        One line, without the title.
+    """
     missing = ", ".join(finding.missing_rate_config_ids)
     suffix = f" Missing daily rate: {missing}." if missing else ""
     configs = ", ".join(finding.config_ids) or "none"
@@ -370,6 +486,15 @@ def _finding_line(finding: FindingCost) -> str:
 
 
 def _limitations(analysis: CostAnalysis) -> str:
+    """Return section 8, what the history file does not prove.
+
+    Args:
+        analysis: Calculated analysis. Only the count of configs with date
+            gaps is taken from it.
+
+    Returns:
+        The limitations section.
+    """
     return "\n".join(
         [
             "8. Limitations",
@@ -401,6 +526,15 @@ def _limitations(analysis: CostAnalysis) -> str:
 
 
 def _appendix(analysis: CostAnalysis) -> str:
+    """Return the appendix, every config in rank order.
+
+    Args:
+        analysis: Calculated analysis. ``ranked_configs`` includes configs
+            with no daily rate.
+
+    Returns:
+        The appendix section.
+    """
     lines = [
         "Appendix. Full per-config ranking",
         "Order is normalized daily cost descending, then config_id.",
@@ -411,11 +545,29 @@ def _appendix(analysis: CostAnalysis) -> str:
 
 
 def _count(value: int, noun: str) -> str:
+    """Format a count with a singular or plural noun.
+
+    Args:
+        value: Count.
+        noun: Singular noun. Any count other than 1 appends ``s``.
+
+    Returns:
+        ``"1 configuration"`` or ``"2 configurations"``.
+    """
     label = noun if value == 1 else f"{noun}s"
     return f"{value} {label}"
 
 
 def _slice_line(item: SliceCost) -> str:
+    """Format one frequency or enabled-state slice.
+
+    Args:
+        item: Slice. ``no daily rate`` is printed when no config in it has
+            a rate, even though the normalized totals are then zero.
+
+    Returns:
+        One indented line.
+    """
     if item.configs_with_run_rate == 0:
         rate = "no daily rate"
     else:
@@ -430,6 +582,16 @@ def _slice_line(item: SliceCost) -> str:
 
 
 def _config_line(config: ConfigCost) -> str:
+    """Format one ranked config.
+
+    Args:
+        config: Config estimate. No runs, a missing rate, and a published
+            rate are three different phrases. A missing destination or SQL
+            path is named as unknown.
+
+    Returns:
+        One line fragment. The daily amount uses four decimal places.
+    """
     dates = len(config.observed_schedule_dates)
     if config.no_observed_runs:
         rate = "no observed runs"
@@ -449,6 +611,15 @@ def _config_line(config: ConfigCost) -> str:
 
 
 def _query_line(query: PricedQuery) -> str:
+    """Format one query on the lineage route.
+
+    Args:
+        query: Priced query. A missing daily cost or TiB prints as
+            ``unmeasured``.
+
+    Returns:
+        One line fragment. Amounts use four decimal places.
+    """
     return (
         f"{query.config_id} {query.frequency} "
         f"{query.destination or 'unknown destination'} "
@@ -458,16 +629,41 @@ def _query_line(query: PricedQuery) -> str:
 
 
 def _usd(amount: Decimal | None, places: int = 2) -> str:
+    """Format a USD amount, or ``unmeasured`` when it was not published.
+
+    Args:
+        amount: Unrounded USD, or ``None``.
+        places: Decimal places. Defaults to cents.
+
+    Returns:
+        ``$`` plus the half-up display amount, or ``unmeasured``.
+    """
     if amount is None:
         return "unmeasured"
     return f"${present_usd(amount, places)}"
 
 
 def _tib(amount: Decimal | None) -> str:
+    """Format a TiB amount to four decimal places.
+
+    Args:
+        amount: Unrounded TiB, or ``None``.
+
+    Returns:
+        The half-up display amount followed by ``TiB``, or ``unmeasured``.
+    """
     if amount is None:
         return "unmeasured"
     return f"{present_usd(amount, 4)} TiB"
 
 
 def _paragraph(text: str) -> str:
+    """Wrap text to the report width.
+
+    Args:
+        text: One paragraph. Runs of whitespace are collapsed.
+
+    Returns:
+        Wrapped text. Continuation lines are indented two spaces.
+    """
     return textwrap.fill(text, width=_WIDTH, subsequent_indent="  ")

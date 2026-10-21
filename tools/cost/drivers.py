@@ -56,7 +56,8 @@ def review_drivers(
         ranked: Engine ranking.
 
     Returns:
-        One review per selected config, in rank order.
+        At most ``DRIVER_LIMIT`` reviews, taken from the front of the top
+        contributors, in that order.
     """
     queries = {query.config_id: query for query in inventory.queries}
     partitions = _partition_columns(inventory)
@@ -86,8 +87,13 @@ def prioritize(
         scenarios: Priced scenarios. Their dollar amounts are not recomputed.
 
     Returns:
-        Recommendations. Conditionally avoidable cost is set only for the
-        no-recorded-consumer scenario.
+        Recommendations numbered from 1. Driver investigations come first,
+        then the no-recorded-consumer confirmation, then one comparison
+        covering every assumed-replacement scenario, then a warning when a
+        hypothetical scenario exists, then one cleanup item per zero-scan
+        scenario.
+        Conditionally avoidable cost is set only for the no-recorded-consumer
+        scenario.
     """
     items: list[Recommendation] = []
     for review in reviews:
@@ -191,6 +197,22 @@ def _review(
     findings: tuple[AuditFinding, ...],
     partitions: dict[str, str],
 ) -> DriverReview:
+    """Assemble one driver review from the files already loaded.
+
+    Partition coverage is skipped when the query has no SQL or the catalog
+    has no partition columns. Finding ids stay in finding order.
+
+    Args:
+        config: Ranked config estimate.
+        query: Paired query, or ``None``.
+        inventory: Usage rows, used to see whether the destination has a reader.
+        graph: Certain reads for the scan text. Any read counts as a reader.
+        findings: Audit findings. An id is listed when it names this config.
+        partitions: ``dataset.table`` to catalog partition column.
+
+    Returns:
+        The review. It does not estimate a byte reduction.
+    """
     sql = "" if query is None else query.sql_text
     tree = _parse(sql)
     retention = retention_days(sql) if sql else None
@@ -254,6 +276,19 @@ def _pattern(
     header: str | None,
     owner: str | None,
 ) -> str:
+    """Describe the schedule, destination, and SQL comments.
+
+    Args:
+        config: Config estimate. Its schedule text is quoted as stored.
+        query: Paired query. A missing query makes the disposition unknown.
+        dates: Number of distinct observed schedule dates.
+        header: First full-line comment that is not an owner line.
+        owner: Text of the first ``owner:`` comment, or ``None``.
+
+    Returns:
+        One paragraph. A comment containing ``daily`` on an hourly schedule
+        is called out.
+    """
     disposition = "unknown" if query is None else (query.write_disposition or "unknown")
     parts = [
         f"Schedule: {config.schedule or 'unknown'} ({config.frequency}). "
@@ -284,6 +319,22 @@ def _scan(
     intervals: tuple[int, ...],
     tree: exp.Expression | None,
 ) -> str:
+    """Describe reads, partition filters, and the shape of the statement.
+
+    Args:
+        config: Config estimate. Used for the execution and date counts.
+        dates: Number of distinct observed schedule dates.
+        sources: Certain ``dataset.table`` reads, already sorted.
+        partitions: Catalog partition columns, keyed by ``dataset.table``.
+        coverage: Partition-filter result, or ``None`` when it was not run.
+        lookback_days: Outer lower bound in days, or ``None``.
+        lookback_uncertain: Whether that bound is not a simple outer predicate.
+        intervals: Distinct ``DAY`` counts found on date subtractions.
+        tree: Parsed statement, or ``None`` when the SQL did not parse.
+
+    Returns:
+        One paragraph. An unparsed statement says the pattern was not classified.
+    """
     parts = []
     if sources:
         parts.append("Reads " + ", ".join(sources) + ".")
@@ -332,6 +383,22 @@ def _investigation(
     intervals: tuple[int, ...],
     tree: exp.Expression | None,
 ) -> str:
+    """Name the checks to run. No byte change is estimated.
+
+    Args:
+        config: Config estimate. An hourly schedule is mentioned only with
+            a wide window or an unfiltered partition.
+        header: First non-owner comment, or ``None``.
+        coverage: Partition-filter result, or ``None``.
+        partitions: Catalog partition columns.
+        lookback_days: Outer lower bound in days, or ``None``.
+        intervals: Distinct day counts from date subtractions.
+        tree: Parsed statement, or ``None``.
+
+    Returns:
+        One paragraph. A statement with none of these signs still asks for
+        a dry run.
+    """
     parts = []
     wide = (lookback_days is not None and lookback_days > 1) or any(
         day > 1 for day in intervals
@@ -377,6 +444,21 @@ def _risks(
     tree: exp.Expression | None,
     intervals: tuple[int, ...],
 ) -> str:
+    """State how a schedule or filter change can affect published rows.
+
+    Args:
+        config: Config estimate. Its destination is checked for readers.
+        query: Paired query. ``WRITE_TRUNCATE`` and ``WRITE_APPEND`` are named.
+        inventory: Usage rows.
+        graph: Read edges. An uncertain read still counts as a reader.
+        tree: Parsed statement, or ``None``.
+        intervals: Day counts. A ``ROW_NUMBER`` warning is added only when
+            this is not empty.
+
+    Returns:
+        One paragraph. A destination with no recorded reader still says the
+        extract may have missed one.
+    """
     parts = []
     disposition = None if query is None else query.write_disposition
     if disposition == "WRITE_TRUNCATE":
@@ -416,6 +498,15 @@ def _risks(
 
 
 def _verification(coverage) -> str:
+    """Return the BigQuery check for this driver.
+
+    Args:
+        coverage: Partition-filter result, or ``None``. An unfiltered table
+            adds a sentence about comparing a partition predicate.
+
+    Returns:
+        The verification paragraph. It does not assume a byte reduction.
+    """
     base = (
         "In BigQuery, dry-run the current SQL and any candidate predicate or "
         "schedule. Compare bytes processed and the destination grain. Do not "
@@ -430,6 +521,15 @@ def _verification(coverage) -> str:
 
 
 def _partition_columns(inventory: Inventory) -> dict[str, str]:
+    """Map ``dataset.table`` to a non-blank catalog partition column.
+
+    Args:
+        inventory: Catalog rows. An unparsed table cell is skipped. A later
+            row with the same key replaces the earlier column.
+
+    Returns:
+        The mapping. A blank partition column is omitted.
+    """
     found = {}
     for row in inventory.catalog:
         if row.table is None:
@@ -441,6 +541,15 @@ def _partition_columns(inventory: Inventory) -> dict[str, str]:
 
 
 def _sources(graph: Graph, config_id: str) -> tuple[str, ...]:
+    """Return the certain tables this query reads.
+
+    Args:
+        graph: Dependency graph. Uncertain reads are omitted.
+        config_id: Scheduled-query id.
+
+    Returns:
+        Sorted ``dataset.table`` values. Empty when the query has no certain read.
+    """
     query_node = f"query:{config_id}"
     tables = {
         dataset_table(edge.source)
@@ -451,6 +560,16 @@ def _sources(graph: Graph, config_id: str) -> tuple[str, ...]:
 
 
 def _has_reader(inventory: Inventory, graph: Graph, destination: str) -> bool:
+    """Return whether the destination has a recorded reader.
+
+    Args:
+        inventory: Usage rows. Any consumer of ``destination`` counts.
+        graph: Read edges. An uncertain read of this table counts.
+        destination: ``dataset.table``.
+
+    Returns:
+        ``True`` when usage or a read edge names the table.
+    """
     if consumers(inventory, destination):
         return True
     table_node = f"table:{destination}"
@@ -460,6 +579,14 @@ def _has_reader(inventory: Inventory, graph: Graph, destination: str) -> bool:
 
 
 def _parse(sql: str) -> exp.Expression | None:
+    """Parse one BigQuery statement.
+
+    Args:
+        sql: Scheduled-query text.
+
+    Returns:
+        The parsed tree, or ``None`` when the text is blank or sqlglot rejects it.
+    """
     if not sql.strip():
         return None
     try:
@@ -469,6 +596,15 @@ def _parse(sql: str) -> exp.Expression | None:
 
 
 def _day_intervals(tree: exp.Expression) -> tuple[int, ...]:
+    """Collect distinct whole-day counts from date subtractions.
+
+    Args:
+        tree: Parsed statement. Date additions are ignored. A non-digit
+            interval, including a leading minus, is ignored.
+
+    Returns:
+        The day counts, sorted.
+    """
     days: set[int] = set()
     nodes = tree.find_all(exp.DateSub, exp.TimestampSub, exp.DatetimeSub)
     for node in nodes:
@@ -482,6 +618,15 @@ def _day_intervals(tree: exp.Expression) -> tuple[int, ...]:
 
 
 def _projection_star(tree: exp.Expression) -> bool:
+    """Return whether any select list contains a star.
+
+    Args:
+        tree: Parsed statement. Nested selects are included. An alias around
+            a star still counts.
+
+    Returns:
+        ``True`` when a star is present.
+    """
     for select in tree.find_all(exp.Select):
         for expression in select.expressions:
             node = expression.this if isinstance(expression, exp.Alias) else expression
@@ -493,6 +638,14 @@ def _projection_star(tree: exp.Expression) -> bool:
 
 
 def _owner(comments: tuple[str, ...]) -> str | None:
+    """Return the text of the first ``owner:`` comment.
+
+    Args:
+        comments: Full-line comment texts, without the leading dashes.
+
+    Returns:
+        The owner text, or ``None`` when no comment matches.
+    """
     for line in comments:
         match = _OWNER.match(line)
         if match is not None:
@@ -501,6 +654,15 @@ def _owner(comments: tuple[str, ...]) -> str | None:
 
 
 def _comments(sql: str) -> tuple[str, ...]:
+    """Return non-empty full-line ``--`` comments, in source order.
+
+    Args:
+        sql: Scheduled-query text. A comment that follows code on the same
+            line is not included. Block comments are not read.
+
+    Returns:
+        Comment text with the leading dashes and surrounding space removed.
+    """
     lines = []
     for line in sql.splitlines():
         stripped = line.strip()
