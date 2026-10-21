@@ -1,4 +1,4 @@
-.PHONY: help build shell api-up api-down extract psql compile estate-stats clean
+.PHONY: help build shell api-up api-down extract schedule-up schedule-down schedule-logs psql compile estate-stats clean
 
 help:
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/ —/' | column -t -s'—'
@@ -17,6 +17,17 @@ api-down:       ## stop them
 
 extract:        ## run your extractor once
 	docker compose run --rm extractor
+
+schedule-up:    ## start 15-minute extractor (Compose profile: schedule)
+	docker compose --profile schedule up -d --build mock-api warehouse extractor-scheduler
+	@echo "scheduler logs: make schedule-logs"
+	@echo "stop:           make schedule-down"
+
+schedule-down:  ## stop the 15-minute extractor (API/warehouse stay up)
+	docker compose --profile schedule stop extractor-scheduler
+
+schedule-logs:  ## follow scheduler and extractor stdout
+	docker compose --profile schedule logs -f extractor-scheduler
 
 psql:           ## open a psql shell on the warehouse
 	docker compose exec warehouse psql -U acme -d acme

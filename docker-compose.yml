@@ -1,8 +1,9 @@
 # One stack for all three tasks.
-#   lab        — where you analyse the estate and compile Dataform (task 2)
-#   mock-api   — the partner API sandbox (task 1)
-#   warehouse  — Postgres, the landing zone for task 1
-#   extractor  — your code (task 1)
+#   lab                 — where you analyse the estate and compile Dataform (task 2)
+#   mock-api            — the partner API sandbox (task 1)
+#   warehouse           — Postgres, the landing zone for task 1
+#   extractor           — one-shot run via `make extract`
+#   extractor-scheduler — optional 15-minute runs (`--profile schedule`)
 services:
   lab:
     build: ./docker
@@ -46,13 +47,37 @@ services:
 
   extractor:
     build: ./task1_api/extractor
+    image: de-takehome-extractor
+    pull_policy: never
     depends_on:
       mock-api: { condition: service_healthy }
       warehouse: { condition: service_healthy }
     environment:
+      PYTHONUNBUFFERED: "1"
       API_BASE: http://mock-api:8080
       API_CLIENT_ID: acme-de-takehome
       API_CLIENT_SECRET: s3cr3t-do-not-commit
       PG_DSN: postgresql://acme:acme@warehouse:5432/acme
     volumes:
       - ./task1_api/extractor:/app
+
+  # Opt-in: docker compose --profile schedule up -d
+  # Does not set EXTRACT_START_DATE; incremental runs follow extract_state.
+  extractor-scheduler:
+    build: ./task1_api/extractor
+    image: de-takehome-extractor
+    pull_policy: never
+    profiles: [schedule]
+    depends_on:
+      mock-api: { condition: service_healthy }
+      warehouse: { condition: service_healthy }
+    environment:
+      PYTHONUNBUFFERED: "1"
+      API_BASE: http://mock-api:8080
+      API_CLIENT_ID: acme-de-takehome
+      API_CLIENT_SECRET: s3cr3t-do-not-commit
+      PG_DSN: postgresql://acme:acme@warehouse:5432/acme
+    volumes:
+      - ./task1_api/extractor:/app
+    command: ["/usr/local/bin/supercronic", "-passthrough-logs", "/app/crontab"]
+    restart: unless-stopped

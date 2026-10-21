@@ -19,6 +19,20 @@ make extract        # запускає task1_api/extractor/main.py
 make psql           # подивитись, що ви завантажили
 ```
 
+Автоматичний запуск кожні 15 хвилин — окремий сервіс `extractor-scheduler`
+(Compose profile `schedule`). Він не стартує з `make api-up` / `make extract`.
+`EXTRACT_START_DATE` не задається: після першого прогону йдуть watermark'и.
+
+```bash
+make schedule-up    # mock-api + warehouse + supercronic */15 * * * *
+make schedule-logs  # stdout/stderr контейнера
+make schedule-down  # зупиняє лише планувальник
+```
+
+Один цикл: той самий `python main.py`. Перетин прогонів блокує advisory lock
+і `flock` у `schedule-run.sh`. `docker compose --profile schedule down` також
+зупиняє планувальник.
+
 Креденшели пісочниці лежать у `docker-compose.yml`. Вони несправжні.
 Читати `task1_api/mock_api/` можна, тільки напишіть про це у `FINDINGS.md`.
 

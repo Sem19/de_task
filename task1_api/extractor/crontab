@@ -1,0 +1,4 @@
+# Credentials come from the container environment, not this file.
+# Do not set EXTRACT_START_DATE here; the one-shot planner already
+# starts from watermarks / last 7 reporting days.
+*/15 * * * * /app/schedule-run.sh
