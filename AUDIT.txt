@@ -1,0 +1,932 @@
+AUDIT
+Scheduled-query estate
+Source directory: task2_estate/
+Regenerate: python -m audit_report
+
+Evidence lines are observations from the supplied files.
+Impact lines are consequences that still need a person or BigQuery.
+Recommendation lines are not actions that have been taken.
+confirmed: the files show the fact. It is not a production incident.
+indicated: the files support the reading and do not prove the published data.
+needs_verification: the next check needs BigQuery or the owner.
+
+Executive summary
+Findings: 31. confirmed: 21. indicated: 3. needs_verification: 7.
+Confirmed entries are observations in the supplied files.
+Indicated and needs_verification entries are not proven production defects.
+Confirmed overlap is a clock fact. It does not prove a stale read or a missing table.
+Highest-priority confirmed findings:
+P1 OP-DUPLICATE-WRITER-sq_0104-sq_0105: reports.revenue_daily has more than one scheduled writer
+P1 OP-NOT-FOUND-raw-app_versions: Run history records Not found while reading raw.app_versions
+P1 OP-NOT-FOUND-raw-partner_postbacks: Run history records Not found while reading raw.partner_postbacks
+P1 OP-NOT-FOUND-staging-stg_sessions_v1: Run history records Not found while reading staging.stg_sessions_v1
+P1 OP-SCHEDULE-OVERLAP-sq_0101-sq_0104: Matched executions overlap: sq_0101 ends after sq_0104 starts
+Highest-priority findings that still need validation:
+P1 CR-COLUMN-NOT-PROJECTED: Downstream SQL names a column the upstream scheduled SQL does not project
+P2 OP-CATALOG-GAP-raw-app_versions: raw.app_versions is read by scheduled SQL and is absent from the supplied catalog
+P2 OP-CATALOG-GAP-raw-partner_postbacks: raw.partner_postbacks is read by scheduled SQL and is absent from the supplied catalog
+P2 OP-CATALOG-GAP-staging-stg_sessions_v1: staging.stg_sessions_v1 is read by scheduled SQL and is absent from the supplied catalog
+P2 CR-COLUMN-WRITER-CONFLICT: Scheduled writers of one table do not project the same columns a reader uses
+Retirement candidates in section 5 are not approved for disabling.
+
+1. Estate summary
+Queries considered: 129 paired scheduled queries.
+SQL files: 129. Transfer configs: 129.
+Enabled: 128. Disabled: 1.
+Run history rows: 19392. Usage rows: 433.
+Catalog rows: 140. Schema tables: 12.
+Inventory findings: 4.
+SQL parse succeeded: 125. SQL parse failed: 4.
+Graph nodes: 284. Graph edges: 562.
+Graph edges by relation and confidence: reads confirmed 204, reads uncertain 8, writes confirmed 129, writes uncertain 0, consumes confirmed 221, consumes uncertain 0.
+
+2. Dependency overview
+Edges point from a source table to a query, then to that query's transfer-config destination.
+Dashboard and ad-hoc usage rows are consumers. They do not add SQL edges.
+Tables named revenue_daily: table:reports.revenue_daily.
+Upstream of that table: query:sq_0101 query:sq_0102 query:sq_0103 query:sq_0104 query:sq_0105 table:raw.fx_rates table:raw.payments table:raw.subscriptions table:staging.stg_fx_daily table:staging.stg_payments table:staging.stg_subscriptions.
+Downstream lineage, including external consumers: consumer:adhoc:etl-runner@acme-analytics-prod.iam.gserviceaccount.com consumer:adhoc:olena.kravets@acme.co consumer:dashboard:looker/content_performance consumer:dashboard:looker/exec_overview consumer:dashboard:looker/experiments consumer:dashboard:looker/funnel_explorer consumer:dashboard:looker/revenue_deep_dive consumer:dashboard:metabase/support_console consumer:dashboard:sheets/paid_media_pacing query:sq_0106 query:sq_0111 query:sq_0112 query:sq_5001 query:sq_5005 table:marts.exec_kpi_v2 table:marts.revenue_unified table:reports.exec_kpi_daily table:reports.kpi_snapshot table:reports.revenue_by_region table:reports.revenue_daily.
+The proposed migration scope is a graph slice, not a decision in this audit: query:sq_0101 query:sq_0102 query:sq_0103 query:sq_0104 query:sq_0105 query:sq_0106 query:sq_0111 query:sq_0112 query:sq_5001 query:sq_5005 table:marts.exec_kpi_v2 table:marts.revenue_unified table:raw.fx_rates table:raw.payments table:raw.subscriptions table:reports.exec_kpi_daily table:reports.kpi_snapshot table:reports.revenue_by_region table:reports.revenue_daily table:staging.stg_fx_daily table:staging.stg_payments table:staging.stg_subscriptions.
+Duplicate writers: table:reports.revenue_daily (query:sq_0104 query:sq_0105).
+Query cycles: 2.
+
+3. Problem register
+Sorted by category, then priority, then finding id.
+operational: 17
+correctness: 7
+maintainability: 7
+total: 31
+
+OPERATIONAL
+P1 OP-DUPLICATE-WRITER-sq_0104-sq_0105 [confirmed] reports.revenue_daily has more than one scheduled writer
+P1 OP-NOT-FOUND-raw-app_versions [confirmed] Run history records Not found while reading raw.app_versions
+P1 OP-NOT-FOUND-raw-partner_postbacks [confirmed] Run history records Not found while reading raw.partner_postbacks
+P1 OP-NOT-FOUND-staging-stg_sessions_v1 [confirmed] Run history records Not found while reading staging.stg_sessions_v1
+P1 OP-SCHEDULE-OVERLAP-sq_0101-sq_0104 [confirmed] Matched executions overlap: sq_0101 ends after sq_0104 starts
+P2 OP-CATALOG-GAP-raw-app_versions [needs_verification] raw.app_versions is read by scheduled SQL and is absent from the supplied catalog
+P2 OP-CATALOG-GAP-raw-partner_postbacks [needs_verification] raw.partner_postbacks is read by scheduled SQL and is absent from the supplied catalog
+P2 OP-CATALOG-GAP-staging-stg_sessions_v1 [needs_verification] staging.stg_sessions_v1 is read by scheduled SQL and is absent from the supplied catalog
+P2 OP-CYCLE-sq_0201-sq_0202 [confirmed] Scheduled queries form a dependency cycle
+P2 OP-CYCLE-sq_0301-sq_0302-sq_0303 [confirmed] Scheduled queries form a dependency cycle
+P2 OP-RESOURCES-EXCEEDED [confirmed] Run history records Resources exceeded failures
+P2 OP-SCHEDULE-OVERLAP-sq_0102-sq_0104 [confirmed] Matched executions overlap: sq_0102 ends after sq_0104 starts
+P2 OP-SCHEDULE-OVERLAP-sq_0105-sq_0106 [confirmed] Matched executions overlap: sq_0105 ends after sq_0106 starts
+P2 OP-SCHEDULE-OVERLAP-sq_0105-sq_5001 [confirmed] Matched executions overlap: sq_0105 ends after sq_5001 starts
+P2 OP-SELF-READ-sq_0112 [confirmed] sq_0112 reads its own destination
+P3 OP-PARTITION-FILTER [needs_verification] Partition predicates are missing or not bound to each partitioned source
+P4 OP-ALREADY-DISABLED [confirmed] A scheduled query is already disabled and has no recorded consumer
+
+CORRECTNESS
+P1 CR-COLUMN-NOT-PROJECTED [needs_verification] Downstream SQL names a column the upstream scheduled SQL does not project
+P1 CR-UNPARSEABLE-SQL [confirmed] sqlglot cannot parse 4 scheduled queries
+P2 CR-COLUMN-WRITER-CONFLICT [needs_verification] Scheduled writers of one table do not project the same columns a reader uses
+P2 CR-ROW-NUMBER-NO-ORDER [confirmed] ROW_NUMBER has no ORDER BY
+P2 CR-SCHEMA-COUNT [indicated] Outermost SELECT lists do not match catalog column counts
+P2 CR-SHORT-LOOKBACK-sq_0104 [indicated] sq_0104 truncates reports.revenue_daily on a shorter outer date bound than a reader filters
+P2 CR-SHORT-LOOKBACK-sq_1001 [indicated] sq_1001 truncates reports.funnel_daily_core on a shorter outer date bound than a reader filters
+
+MAINTAINABILITY
+P3 MN-REPEATED-SQL-sq_0105-sq_0114 [confirmed] Scheduled queries share the same SQL text
+P3 MN-REPEATED-SQL-sq_0411-sq_0412-sq_0413 [confirmed] Scheduled queries share the same SQL text
+P3 MN-REPEATED-SQL-sq_1012-sq_5007 [confirmed] Scheduled queries share the same SQL text
+P3 MN-REPEATED-SQL-sq_1016-sq_5010 [confirmed] Scheduled queries share the same SQL text
+P3 MN-REPEATED-SQL-sq_1017-sq_5009 [confirmed] Scheduled queries share the same SQL text
+P3 MN-REPEATED-SQL-sq_5016-sq_5017 [confirmed] Scheduled queries share the same SQL text
+P3 MN-RETIRE-NO-RECORDED-CONSUMER [needs_verification] Enabled queries have no consumer in the supplied graph or usage extract
+
+4. Findings
+
+OP-DUPLICATE-WRITER-sq_0104-sq_0105
+Category: operational
+Priority: 1
+Confidence: confirmed
+Title: reports.revenue_daily has more than one scheduled writer
+Config IDs: sq_0104, sq_0105
+SQL files: task2_estate/scheduled_queries/sq_0104__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql
+Evidence: Graph write edges and transfer configs name the same destination reports.revenue_daily.
+  sq_0104 WRITE_TRUNCATE schedule every day 03:10; sq_0105 WRITE_APPEND schedule every 1
+  hours. inventory finding shared_destination is present: True.
+Impact: The jobs can replace or append different column meanings in one table.
+Recommendation: Keep both jobs in the registry. Do not drop either writer in this audit. Ask the owner
+  which definition is authoritative before disabling one.
+
+OP-NOT-FOUND-raw-app_versions
+Category: operational
+Priority: 1
+Confidence: confirmed
+Title: Run history records Not found while reading raw.app_versions
+Config IDs: sq_5013
+SQL files: task2_estate/scheduled_queries/sq_5013__marts__app_version_adoption.sql
+Evidence: sq_5013 90 row(s), first error: Not found: Table acme-analytics-prod:raw.app_versions
+  was not found in location EU. The error string is a recorded failure. It does not
+  prove the table is still missing.
+Impact: Those runs did not write a successful output. A dashboard can still point at an older
+  destination table.
+Recommendation: Do not disable the job only because these runs failed, and do not delete its
+  destination. Confirm whether the source exists now.
+
+OP-NOT-FOUND-raw-partner_postbacks
+Category: operational
+Priority: 1
+Confidence: confirmed
+Title: Run history records Not found while reading raw.partner_postbacks
+Config IDs: sq_5014
+SQL files: task2_estate/scheduled_queries/sq_5014__marts__partner_postback_recon.sql
+Evidence: sq_5014 90 row(s), first error: Not found: Table acme-analytics-
+  prod:raw.partner_postbacks was not found in location EU. The error string is a
+  recorded failure. It does not prove the table is still missing.
+Impact: Those runs did not write a successful output. A dashboard can still point at an older
+  destination table.
+Recommendation: Do not disable the job only because these runs failed, and do not delete its
+  destination. Confirm whether the source exists now.
+
+OP-NOT-FOUND-staging-stg_sessions_v1
+Category: operational
+Priority: 1
+Confidence: confirmed
+Title: Run history records Not found while reading staging.stg_sessions_v1
+Config IDs: sq_5015
+SQL files: task2_estate/scheduled_queries/sq_5015__marts__session_quality_v1.sql
+Evidence: sq_5015 90 row(s), first error: Not found: Table acme-analytics-
+  prod:staging.stg_sessions_v1 was not found in location EU. The error string is a
+  recorded failure. It does not prove the table is still missing.
+Impact: Those runs did not write a successful output. A dashboard can still point at an older
+  destination table.
+Recommendation: Do not disable the job only because these runs failed, and do not delete its
+  destination. Confirm whether the source exists now.
+
+OP-SCHEDULE-OVERLAP-sq_0101-sq_0104
+Category: operational
+Priority: 1
+Confidence: confirmed
+Title: Matched executions overlap: sq_0101 ends after sq_0104 starts
+Config IDs: sq_0101, sq_0104
+SQL files: task2_estate/scheduled_queries/sq_0101__staging__stg_payments.sql,
+  task2_estate/scheduled_queries/sq_0104__reports__revenue_daily.sql
+Evidence: Paired 90 of 90 reader executions with the latest successful sq_0101 schedule_time at or
+  before the reader schedule_time. sq_0104 reads staging.stg_payments, which sq_0101
+  writes. Producer schedule every day 03:00 timezone Europe/Kyiv. Reader schedule every
+  day 03:10 timezone Europe/Kyiv. History timestamps are compared as offset-aware
+  instants. The config timezone is not used to rewrite those offsets. Timestamps without
+  an offset are ignored. This is observed execution overlap, not proof of stale data. A
+  run whose end_time is earlier than its start_time is omitted.
+Impact: The reader may have started before that producer execution finished. This does not prove
+  the reader scanned a stale snapshot.
+Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
+  lag.
+
+OP-CATALOG-GAP-raw-app_versions
+Category: operational
+Priority: 2
+Confidence: needs_verification
+Title: raw.app_versions is read by scheduled SQL and is absent from the supplied catalog
+Config IDs: sq_5013
+SQL files: task2_estate/scheduled_queries/sq_5013__marts__app_version_adoption.sql
+Evidence: Certain SQL reads name raw.app_versions. It is absent from table_catalog.csv and from
+  scheduled-query destinations. Consumers recorded on raw.app_versions: scheduled_query
+  sq_5013. The catalog extract does not prove the table is absent from production.
+Impact: A migration that assumes the table does not exist can skip a source that BigQuery still
+  has.
+Recommendation: Confirm the table in BigQuery. Do not delete a destination because the catalog omits
+  this source.
+
+OP-CATALOG-GAP-raw-partner_postbacks
+Category: operational
+Priority: 2
+Confidence: needs_verification
+Title: raw.partner_postbacks is read by scheduled SQL and is absent from the supplied catalog
+Config IDs: sq_5014
+SQL files: task2_estate/scheduled_queries/sq_5014__marts__partner_postback_recon.sql
+Evidence: Certain SQL reads name raw.partner_postbacks. It is absent from table_catalog.csv and
+  from scheduled-query destinations. Consumers recorded on raw.partner_postbacks:
+  scheduled_query sq_5014. The catalog extract does not prove the table is absent from
+  production.
+Impact: A migration that assumes the table does not exist can skip a source that BigQuery still
+  has.
+Recommendation: Confirm the table in BigQuery. Do not delete a destination because the catalog omits
+  this source.
+
+OP-CATALOG-GAP-staging-stg_sessions_v1
+Category: operational
+Priority: 2
+Confidence: needs_verification
+Title: staging.stg_sessions_v1 is read by scheduled SQL and is absent from the supplied catalog
+Config IDs: sq_5015
+SQL files: task2_estate/scheduled_queries/sq_5015__marts__session_quality_v1.sql
+Evidence: Certain SQL reads name staging.stg_sessions_v1. It is absent from table_catalog.csv and
+  from scheduled-query destinations. Consumers recorded on staging.stg_sessions_v1:
+  scheduled_query sq_5015. The catalog extract does not prove the table is absent from
+  production.
+Impact: A migration that assumes the table does not exist can skip a source that BigQuery still
+  has.
+Recommendation: Confirm the table in BigQuery. Do not delete a destination because the catalog omits
+  this source.
+
+OP-CYCLE-sq_0201-sq_0202
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: Scheduled queries form a dependency cycle
+Config IDs: sq_0201, sq_0202
+SQL files: task2_estate/scheduled_queries/sq_0201__marketing__spend_daily.sql,
+  task2_estate/scheduled_queries/sq_0202__marketing__spend_enriched.sql
+Evidence: Certain read and write edges connect sq_0201, sq_0202 through marketing.spend_daily,
+  marketing.spend_enriched.
+Impact: A cycle has no safe first run. Each query can read the other query's previous output.
+Recommendation: Do not schedule these as a simple chain. Confirm with the owner which edge is the
+  intended lag.
+
+OP-CYCLE-sq_0301-sq_0302-sq_0303
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: Scheduled queries form a dependency cycle
+Config IDs: sq_0301, sq_0302, sq_0303
+SQL files: task2_estate/scheduled_queries/sq_0301__ml__user_daily.sql,
+  task2_estate/scheduled_queries/sq_0302__ml__user_features.sql,
+  task2_estate/scheduled_queries/sq_0303__ml__user_segments.sql
+Evidence: Certain read and write edges connect sq_0301, sq_0302, sq_0303 through ml.user_daily,
+  ml.user_features, ml.user_segments.
+Impact: A cycle has no safe first run. Each query can read the other query's previous output.
+Recommendation: Do not schedule these as a simple chain. Confirm with the owner which edge is the
+  intended lag.
+
+OP-RESOURCES-EXCEEDED
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: Run history records Resources exceeded failures
+Config IDs: sq_0105, sq_0109, sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008, sq_3009, sq_3010, sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3018, sq_3020, sq_3021, sq_3022, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027, sq_3028, sq_3029, sq_3030, sq_4001, sq_4003, sq_4004, sq_4005, sq_4006, sq_4009, sq_4010, sq_4011, sq_4012, sq_4013, sq_4014, sq_4016, sq_4017, sq_4018, sq_4019, sq_4020, sq_4021, sq_4022, sq_4023, sq_4024
+SQL files: task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0109__reports__ltv_by_cohort.sql,
+  task2_estate/scheduled_queries/sq_3001__marts__events_hourly_core.sql,
+  task2_estate/scheduled_queries/sq_3002__marts__events_hourly_country.sql,
+  task2_estate/scheduled_queries/sq_3003__marts__events_hourly_device.sql,
+  task2_estate/scheduled_queries/sq_3004__marts__events_hourly_lang.sql,
+  task2_estate/scheduled_queries/sq_3005__marts__events_hourly_utm.sql,
+  task2_estate/scheduled_queries/sq_3006__marts__events_hourly_exp.sql,
+  task2_estate/scheduled_queries/sq_3007__marts__events_hourly_unpart.sql,
+  task2_estate/scheduled_queries/sq_3008__marts__payment_attempts_hourly.sql,
+  task2_estate/scheduled_queries/sq_3009__marts__payment_attempts_by_proc.sql,
+  task2_estate/scheduled_queries/sq_3010__marts__payment_attempts_retry.sql,
+  task2_estate/scheduled_queries/sq_3011__marts__payment_attempts_unpart.sql,
+  task2_estate/scheduled_queries/sq_3012__marts__revenue_hourly_topup.sql,
+  task2_estate/scheduled_queries/sq_3013__marts__settle_rate_hourly.sql,
+  task2_estate/scheduled_queries/sq_3014__marts__funnel_hourly_core.sql,
+  task2_estate/scheduled_queries/sq_3015__marts__funnel_hourly_lang.sql,
+  task2_estate/scheduled_queries/sq_3016__marts__funnel_hourly_utm.sql,
+  task2_estate/scheduled_queries/sq_3017__marts__funnel_hourly_country.sql,
+  task2_estate/scheduled_queries/sq_3018__marts__events_app_raw_hourly.sql,
+  task2_estate/scheduled_queries/sq_3020__marts__reads_hourly_genre.sql,
+  task2_estate/scheduled_queries/sq_3021__marts__reads_hourly_device.sql,
+  task2_estate/scheduled_queries/sq_3022__marts__subs_snapshot_hourly.sql,
+  task2_estate/scheduled_queries/sq_3023__marts__revenue_intraday_eur.sql,
+  task2_estate/scheduled_queries/sq_3024__marts__revenue_intraday_usd.sql,
+  task2_estate/scheduled_queries/sq_3025__staging__stg_events_hourly.sql,
+  task2_estate/scheduled_queries/sq_3026__staging__stg_payments_hourly.sql,
+  task2_estate/scheduled_queries/sq_3027__staging__stg_reads_hourly.sql,
+  task2_estate/scheduled_queries/sq_3028__staging__stg_users_hourly.sql,
+  task2_estate/scheduled_queries/sq_3029__marts__plan_mix_hourly.sql,
+  task2_estate/scheduled_queries/sq_3030__marts__daily_rebuild_events_wide.sql,
+  task2_estate/scheduled_queries/sq_4001__ml__abtest_checkout_v3.sql,
+  task2_estate/scheduled_queries/sq_4003__ml__abtest_onboarding_quiz.sql,
+  task2_estate/scheduled_queries/sq_4004__ml__abtest_price_anchor.sql,
+  task2_estate/scheduled_queries/sq_4005__ml__abtest_recs_carousel.sql,
+  task2_estate/scheduled_queries/sq_4006__ml__abtest_email_cadence.sql,
+  task2_estate/scheduled_queries/sq_4009__ml__abtest_revenue_join.sql,
+  task2_estate/scheduled_queries/sq_4010__ml__abtest_revenue_join_90d.sql,
+  task2_estate/scheduled_queries/sq_4011__ml__ltv_pred_inputs.sql,
+  task2_estate/scheduled_queries/sq_4012__ml__ltv_pred_inputs_v2.sql,
+  task2_estate/scheduled_queries/sq_4013__ml__ltv_pred_inputs_v3.sql,
+  task2_estate/scheduled_queries/sq_4014__ml__reads_features_7d.sql,
+  task2_estate/scheduled_queries/sq_4016__ml__reads_features_90d.sql,
+  task2_estate/scheduled_queries/sq_4017__ml__cohort_matrix_ml.sql,
+  task2_estate/scheduled_queries/sq_4018__ml__cohort_matrix_ml_tier.sql,
+  task2_estate/scheduled_queries/sq_4019__ml__churn_candidates.sql,
+  task2_estate/scheduled_queries/sq_4020__ml__winback_candidates.sql,
+  task2_estate/scheduled_queries/sq_4021__ml__segment_mix_daily.sql,
+  task2_estate/scheduled_queries/sq_4022__ml__engagement_overlap.sql,
+  task2_estate/scheduled_queries/sq_4023__ml__retention_ml.sql,
+  task2_estate/scheduled_queries/sq_4024__ml__funnel_ml_features.sql
+Evidence: run_history.csv error_message starts with 'Resources exceeded'. Counts by config_id:
+  sq_0105:5, sq_0109:1, sq_3001:2, sq_3002:4, sq_3003:6, sq_3004:7, sq_3005:3,
+  sq_3006:3, sq_3007:6, sq_3008:6, sq_3009:3, sq_3010:7, sq_3011:2, sq_3012:3,
+  sq_3013:4, sq_3014:3, sq_3015:4, sq_3016:5, sq_3017:6, sq_3018:3, sq_3020:4,
+  sq_3021:2, sq_3022:2, sq_3023:2, sq_3024:1, sq_3025:2, sq_3026:3, sq_3027:2,
+  sq_3028:4, sq_3029:4, sq_3030:1, sq_4001:5, sq_4003:3, sq_4004:1, sq_4005:1,
+  sq_4006:2, sq_4009:1, sq_4010:2, sq_4011:2, sq_4012:1, sq_4013:2, sq_4014:2,
+  sq_4016:2, sq_4017:2, sq_4018:1, sq_4019:1, sq_4020:1, sq_4021:1, sq_4022:2,
+  sq_4023:3, sq_4024:1.
+Impact: Those runs wrote no successful output for that attempt. The message does not identify
+  which slot or shuffle limit was hit.
+Recommendation: Investigate the highest counts in BigQuery. This audit does not change their SQL.
+
+OP-SCHEDULE-OVERLAP-sq_0102-sq_0104
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: Matched executions overlap: sq_0102 ends after sq_0104 starts
+Config IDs: sq_0102, sq_0104
+SQL files: task2_estate/scheduled_queries/sq_0102__staging__stg_subscriptions.sql,
+  task2_estate/scheduled_queries/sq_0104__reports__revenue_daily.sql
+Evidence: Paired 37 of 90 reader executions with the latest successful sq_0102 schedule_time at or
+  before the reader schedule_time. sq_0104 reads staging.stg_subscriptions, which
+  sq_0102 writes. Producer schedule every day 03:00 timezone Europe/Kyiv. Reader
+  schedule every day 03:10 timezone Europe/Kyiv. History timestamps are compared as
+  offset-aware instants. The config timezone is not used to rewrite those offsets.
+  Timestamps without an offset are ignored. This is observed execution overlap, not
+  proof of stale data. A run whose end_time is earlier than its start_time is omitted.
+Impact: The reader may have started before that producer execution finished. This does not prove
+  the reader scanned a stale snapshot.
+Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
+  lag.
+
+OP-SCHEDULE-OVERLAP-sq_0105-sq_0106
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: Matched executions overlap: sq_0105 ends after sq_0106 starts
+Config IDs: sq_0105, sq_0106
+SQL files: task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0106__reports__revenue_by_region.sql
+Evidence: Paired 10 of 14 reader executions with the latest successful sq_0105 schedule_time at or
+  before the reader schedule_time. sq_0106 reads reports.revenue_daily, which sq_0105
+  writes. Producer schedule every 1 hours timezone Europe/Kyiv. Reader schedule every
+  day 04:00 timezone Europe/Kyiv. History timestamps are compared as offset-aware
+  instants. The config timezone is not used to rewrite those offsets. Timestamps without
+  an offset are ignored. This is observed execution overlap, not proof of stale data. A
+  run whose end_time is earlier than its start_time is omitted. At least one schedule is
+  hourly, so a later run on the same calendar day is not paired with an earlier reader.
+Impact: The reader may have started before that producer execution finished. This does not prove
+  the reader scanned a stale snapshot.
+Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
+  lag.
+
+OP-SCHEDULE-OVERLAP-sq_0105-sq_5001
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: Matched executions overlap: sq_0105 ends after sq_5001 starts
+Config IDs: sq_0105, sq_5001
+SQL files: task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_5001__marts__revenue_unified.sql
+Evidence: Paired 10 of 14 reader executions with the latest successful sq_0105 schedule_time at or
+  before the reader schedule_time. sq_5001 reads reports.revenue_daily, which sq_0105
+  writes. Producer schedule every 1 hours timezone Europe/Kyiv. Reader schedule every
+  day 05:00 timezone Europe/Kyiv. History timestamps are compared as offset-aware
+  instants. The config timezone is not used to rewrite those offsets. Timestamps without
+  an offset are ignored. This is observed execution overlap, not proof of stale data. A
+  run whose end_time is earlier than its start_time is omitted. At least one schedule is
+  hourly, so a later run on the same calendar day is not paired with an earlier reader.
+Impact: The reader may have started before that producer execution finished. This does not prove
+  the reader scanned a stale snapshot.
+Recommendation: Record the overlap. Do not change either schedule until the owner accepts or rejects the
+  lag.
+
+OP-SELF-READ-sq_0112
+Category: operational
+Priority: 2
+Confidence: confirmed
+Title: sq_0112 reads its own destination
+Config IDs: sq_0112
+SQL files: task2_estate/scheduled_queries/sq_0112__reports__kpi_snapshot.sql
+Evidence: A certain read edge and the transfer-config destination are both reports.kpi_snapshot.
+Impact: The query depends on rows it wrote on an earlier run. A full rebuild is not the same as
+  the daily job.
+Recommendation: Treat the self-read as part of the contract. Do not replace it with a table that only
+  reads upstream.
+
+OP-PARTITION-FILTER
+Category: operational
+Priority: 3
+Confidence: needs_verification
+Title: Partition predicates are missing or not bound to each partitioned source
+Config IDs: sq_0101, sq_0105, sq_0107, sq_0108, sq_0109, sq_0110, sq_0114, sq_0301, sq_0401, sq_0402, sq_0403, sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1006, sq_1007, sq_1008, sq_1009, sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016, sq_1017, sq_1018, sq_1019, sq_1020, sq_1021, sq_1022, sq_1024, sq_1025, sq_1026, sq_1027, sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3007, sq_3008, sq_3009, sq_3010, sq_3011, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3018, sq_3019, sq_3020, sq_3021, sq_3023, sq_3024, sq_3025, sq_3026, sq_3027, sq_3030, sq_4001, sq_4002, sq_4003, sq_4004, sq_4005, sq_4006, sq_4007, sq_4008, sq_4009, sq_4010, sq_4011, sq_4012, sq_4013, sq_4014, sq_4015, sq_4016, sq_4017, sq_4018, sq_4022, sq_4023, sq_4024, sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012, sq_5013, sq_5014, sq_5015, sq_5016, sq_5017, sq_5018, sq_5019
+SQL files: task2_estate/scheduled_queries/sq_0101__staging__stg_payments.sql,
+  task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0107__reports__revenue_daily_eur.sql,
+  task2_estate/scheduled_queries/sq_0108__reports__revenue_daily_strict.sql,
+  task2_estate/scheduled_queries/sq_0109__reports__ltv_by_cohort.sql,
+  task2_estate/scheduled_queries/sq_0110__reports__ltv_by_cohort_v2.sql,
+  task2_estate/scheduled_queries/sq_0114__reports__payment_settle_hourly.sql,
+  task2_estate/scheduled_queries/sq_0301__ml__user_daily.sql,
+  task2_estate/scheduled_queries/sq_0401__reports__funnel_2024.sql,
+  task2_estate/scheduled_queries/sq_0402__reports__funnel_2025.sql,
+  task2_estate/scheduled_queries/sq_0403__reports__funnel_current.sql,
+  task2_estate/scheduled_queries/sq_1001__reports__funnel_daily_core.sql,
+  task2_estate/scheduled_queries/sq_1002__reports__funnel_daily_lang.sql,
+  task2_estate/scheduled_queries/sq_1003__reports__funnel_daily_utm.sql,
+  task2_estate/scheduled_queries/sq_1004__reports__funnel_daily_campaign.sql,
+  task2_estate/scheduled_queries/sq_1005__reports__funnel_daily_referrer.sql,
+  task2_estate/scheduled_queries/sq_1006__reports__funnel_daily_experiment.sql,
+  task2_estate/scheduled_queries/sq_1007__reports__reads_daily_genre.sql,
+  task2_estate/scheduled_queries/sq_1008__reports__reads_daily_device.sql,
+  task2_estate/scheduled_queries/sq_1009__reports__reads_daily_30d.sql,
+  task2_estate/scheduled_queries/sq_1010__reports__reads_daily_full.sql,
+  task2_estate/scheduled_queries/sq_1011__reports__channel_report_daily.sql,
+  task2_estate/scheduled_queries/sq_1012__reports__channel_report_weekly.sql,
+  task2_estate/scheduled_queries/sq_1013__reports__channel_report_country.sql,
+  task2_estate/scheduled_queries/sq_1014__reports__channel_report_qtd.sql,
+  task2_estate/scheduled_queries/sq_1015__reports__cohort_retention_reads.sql,
+  task2_estate/scheduled_queries/sq_1016__reports__cohort_retention_90d.sql,
+  task2_estate/scheduled_queries/sq_1017__reports__title_performance.sql,
+  task2_estate/scheduled_queries/sq_1018__reports__surface_overlap_daily.sql,
+  task2_estate/scheduled_queries/sq_1019__reports__surface_overlap_monthly.sql,
+  task2_estate/scheduled_queries/sq_1020__reports__cohort_activity_matrix.sql,
+  task2_estate/scheduled_queries/sq_1021__reports__events_checkout_raw.sql,
+  task2_estate/scheduled_queries/sq_1022__reports__events_payment_raw.sql,
+  task2_estate/scheduled_queries/sq_1024__reports__reads_daily_paid.sql,
+  task2_estate/scheduled_queries/sq_1025__reports__funnel_daily_country.sql,
+  task2_estate/scheduled_queries/sq_1026__reports__events_daily_wide.sql,
+  task2_estate/scheduled_queries/sq_1027__reports__ltv_by_country.sql,
+  task2_estate/scheduled_queries/sq_3001__marts__events_hourly_core.sql,
+  task2_estate/scheduled_queries/sq_3002__marts__events_hourly_country.sql,
+  task2_estate/scheduled_queries/sq_3003__marts__events_hourly_device.sql,
+  task2_estate/scheduled_queries/sq_3004__marts__events_hourly_lang.sql,
+  task2_estate/scheduled_queries/sq_3005__marts__events_hourly_utm.sql,
+  task2_estate/scheduled_queries/sq_3006__marts__events_hourly_exp.sql,
+  task2_estate/scheduled_queries/sq_3007__marts__events_hourly_unpart.sql,
+  task2_estate/scheduled_queries/sq_3008__marts__payment_attempts_hourly.sql,
+  task2_estate/scheduled_queries/sq_3009__marts__payment_attempts_by_proc.sql,
+  task2_estate/scheduled_queries/sq_3010__marts__payment_attempts_retry.sql,
+  task2_estate/scheduled_queries/sq_3011__marts__payment_attempts_unpart.sql,
+  task2_estate/scheduled_queries/sq_3012__marts__revenue_hourly_topup.sql,
+  task2_estate/scheduled_queries/sq_3013__marts__settle_rate_hourly.sql,
+  task2_estate/scheduled_queries/sq_3014__marts__funnel_hourly_core.sql,
+  task2_estate/scheduled_queries/sq_3015__marts__funnel_hourly_lang.sql,
+  task2_estate/scheduled_queries/sq_3016__marts__funnel_hourly_utm.sql,
+  task2_estate/scheduled_queries/sq_3017__marts__funnel_hourly_country.sql,
+  task2_estate/scheduled_queries/sq_3018__marts__events_app_raw_hourly.sql,
+  task2_estate/scheduled_queries/sq_3019__marts__events_search_raw_hourly.sql,
+  task2_estate/scheduled_queries/sq_3020__marts__reads_hourly_genre.sql,
+  task2_estate/scheduled_queries/sq_3021__marts__reads_hourly_device.sql,
+  task2_estate/scheduled_queries/sq_3023__marts__revenue_intraday_eur.sql,
+  task2_estate/scheduled_queries/sq_3024__marts__revenue_intraday_usd.sql,
+  task2_estate/scheduled_queries/sq_3025__staging__stg_events_hourly.sql,
+  task2_estate/scheduled_queries/sq_3026__staging__stg_payments_hourly.sql,
+  task2_estate/scheduled_queries/sq_3027__staging__stg_reads_hourly.sql,
+  task2_estate/scheduled_queries/sq_3030__marts__daily_rebuild_events_wide.sql,
+  task2_estate/scheduled_queries/sq_4001__ml__abtest_checkout_v3.sql,
+  task2_estate/scheduled_queries/sq_4002__ml__abtest_paywall_position.sql,
+  task2_estate/scheduled_queries/sq_4003__ml__abtest_onboarding_quiz.sql,
+  task2_estate/scheduled_queries/sq_4004__ml__abtest_price_anchor.sql,
+  task2_estate/scheduled_queries/sq_4005__ml__abtest_recs_carousel.sql,
+  task2_estate/scheduled_queries/sq_4006__ml__abtest_email_cadence.sql,
+  task2_estate/scheduled_queries/sq_4007__ml__abtest_cancel_flow.sql,
+  task2_estate/scheduled_queries/sq_4008__ml__abtest_free_episodes.sql,
+  task2_estate/scheduled_queries/sq_4009__ml__abtest_revenue_join.sql,
+  task2_estate/scheduled_queries/sq_4010__ml__abtest_revenue_join_90d.sql,
+  task2_estate/scheduled_queries/sq_4011__ml__ltv_pred_inputs.sql,
+  task2_estate/scheduled_queries/sq_4012__ml__ltv_pred_inputs_v2.sql,
+  task2_estate/scheduled_queries/sq_4013__ml__ltv_pred_inputs_v3.sql,
+  task2_estate/scheduled_queries/sq_4014__ml__reads_features_7d.sql,
+  task2_estate/scheduled_queries/sq_4015__ml__reads_features_30d.sql,
+  task2_estate/scheduled_queries/sq_4016__ml__reads_features_90d.sql,
+  task2_estate/scheduled_queries/sq_4017__ml__cohort_matrix_ml.sql,
+  task2_estate/scheduled_queries/sq_4018__ml__cohort_matrix_ml_tier.sql,
+  task2_estate/scheduled_queries/sq_4022__ml__engagement_overlap.sql,
+  task2_estate/scheduled_queries/sq_4023__ml__retention_ml.sql,
+  task2_estate/scheduled_queries/sq_4024__ml__funnel_ml_features.sql,
+  task2_estate/scheduled_queries/sq_5004__marts__region_rollup_new.sql,
+  task2_estate/scheduled_queries/sq_5007__marts__legacy_weekly_deck.sql,
+  task2_estate/scheduled_queries/sq_5008__marts__legacy_country_deck.sql,
+  task2_estate/scheduled_queries/sq_5009__marts__legacy_title_deck.sql,
+  task2_estate/scheduled_queries/sq_5010__marts__legacy_retention_deck.sql,
+  task2_estate/scheduled_queries/sq_5011__marts__legacy_ltv_deck.sql,
+  task2_estate/scheduled_queries/sq_5012__marts__legacy_abtest_deck.sql,
+  task2_estate/scheduled_queries/sq_5013__marts__app_version_adoption.sql,
+  task2_estate/scheduled_queries/sq_5014__marts__partner_postback_recon.sql,
+  task2_estate/scheduled_queries/sq_5015__marts__session_quality_v1.sql,
+  task2_estate/scheduled_queries/sq_5016__marts__exec_revenue_board.sql,
+  task2_estate/scheduled_queries/sq_5017__marts__exec_revenue_board_copy.sql,
+  task2_estate/scheduled_queries/sq_5018__marts__dst_gap_daily_recon.sql,
+  task2_estate/scheduled_queries/sq_5019__marts__paused_experiment_readout.sql
+Evidence: Catalog partition columns: raw.events=_PARTITIONTIME, raw.payments=_PARTITIONTIME,
+  raw.reads=_PARTITIONTIME. No predicate bound to: sq_0101 raw.payments, sq_0105
+  raw.payments, sq_0108 raw.payments, sq_0109 raw.payments, sq_0114 raw.payments,
+  sq_0301 raw.reads, sq_0401 raw.events, sq_0402 raw.events, sq_0403 raw.events, sq_1001
+  raw.events, sq_1002 raw.events, sq_1003 raw.events, sq_1004 raw.events, sq_1005
+  raw.events, sq_1006 raw.events, sq_1007 raw.reads, sq_1008 raw.reads, sq_1009
+  raw.reads, sq_1010 raw.reads, sq_1011 raw.payments, sq_1012 raw.payments, sq_1013
+  raw.payments, sq_1014 raw.payments, sq_1015 raw.reads, sq_1016 raw.reads, sq_1017
+  raw.reads, sq_1018 raw.events, sq_1019 raw.events, sq_1020 raw.reads, sq_1021
+  raw.events, sq_1022 raw.events, sq_1024 raw.reads, sq_1025 raw.events, sq_1026
+  raw.events, sq_1027 raw.payments, sq_3001 raw.events, sq_3002 raw.events, sq_3003
+  raw.events, sq_3004 raw.events, sq_3005 raw.events, sq_3006 raw.events, sq_3007
+  raw.events, sq_3008 raw.payments, sq_3009 raw.payments, sq_3010 raw.payments, sq_3011
+  raw.payments, sq_3012 raw.payments, sq_3013 raw.payments, sq_3014 raw.events, sq_3015
+  raw.events, sq_3016 raw.events, sq_3017 raw.events, sq_3018 raw.events, sq_3019
+  raw.events, sq_3020 raw.reads, sq_3021 raw.reads, sq_3023 raw.payments, sq_3025
+  raw.events, sq_3026 raw.payments, sq_3027 raw.reads, sq_3030 raw.events, sq_4001
+  raw.payments, sq_4002 raw.payments, sq_4003 raw.payments, sq_4004 raw.payments,
+  sq_4005 raw.payments, sq_4006 raw.payments, sq_4007 raw.payments, sq_4008
+  raw.payments, sq_4009 raw.payments, sq_4010 raw.payments, sq_4011 raw.payments,
+  sq_4012 raw.payments, sq_4013 raw.payments, sq_4014 raw.reads, sq_4015 raw.reads,
+  sq_4016 raw.reads, sq_4017 raw.reads, sq_4018 raw.reads, sq_4022 raw.events, sq_4023
+  raw.reads, sq_4024 raw.events, sq_5004 raw.events, sq_5007 raw.payments, sq_5008
+  raw.events, sq_5009 raw.reads, sq_5010 raw.reads, sq_5012 raw.payments, sq_5013
+  raw.events, sq_5014 raw.events, sq_5015 raw.events, sq_5016 raw.payments, sq_5017
+  raw.payments, sq_5018 raw.payments, sq_5019 raw.payments. SQL that did not parse was
+  not classified: sq_0107, sq_0110, sq_3024, sq_5011. A predicate on one source is not
+  applied to another. _PARTITIONTIME in ORDER BY or the select list is not a filter. No
+  EXPLAIN was run, so pruning is not measured.
+Impact: A filter on a normal timestamp, or on a different table's pseudo-column, does not prune
+  this source.
+Recommendation: Verify partition pruning in BigQuery before rewriting filters. Do not add a predicate
+  only to change the scanned bytes.
+
+OP-ALREADY-DISABLED
+Category: operational
+Priority: 4
+Confidence: confirmed
+Title: A scheduled query is already disabled and has no recorded consumer
+Config IDs: sq_5019
+SQL files: task2_estate/scheduled_queries/sq_5019__marts__paused_experiment_readout.sql
+Evidence: sq_5019 state DISABLED disabled True destination marts.paused_experiment_readout.
+  History rows for these config ids: 0. No certain or uncertain read of the destination
+  is in the graph.
+Impact: The table remains in the catalog. Usage coverage is only the supplied file.
+Recommendation: Leave it disabled. Do not drop the table from this audit.
+
+CR-COLUMN-NOT-PROJECTED
+Category: correctness
+Priority: 1
+Confidence: needs_verification
+Title: Downstream SQL names a column the upstream scheduled SQL does not project
+Config IDs: sq_0106, sq_0111, sq_0112, sq_5005
+SQL files: task2_estate/scheduled_queries/sq_0106__reports__revenue_by_region.sql,
+  task2_estate/scheduled_queries/sq_0111__reports__exec_kpi_daily.sql,
+  task2_estate/scheduled_queries/sq_0112__reports__kpi_snapshot.sql,
+  task2_estate/scheduled_queries/sq_5005__marts__exec_kpi_v2.sql
+Evidence: sq_0112 reads metric_name from reports.exec_kpi_daily; sq_0111 does not project
+  metric_name. sq_0112 reads metric_value from reports.exec_kpi_daily; sq_0111 does not
+  project metric_value. sq_5005 reads payment_date from reports.exec_kpi_daily; sq_0111
+  does not project payment_date. sq_0111 reads payment_date from
+  reports.revenue_by_region; sq_0106 does not project payment_date. Checked-in SQL for
+  every writer omits the column. The published table was not queried, so a SUCCEEDED
+  history row does not prove the live schema matches the file.
+Impact: Compiling the reader against the writer file would reject the column. The live table may
+  still contain it.
+Recommendation: Do not rename the column until the owner confirms which schema is published.
+
+CR-UNPARSEABLE-SQL
+Category: correctness
+Priority: 1
+Confidence: confirmed
+Title: sqlglot cannot parse 4 scheduled queries
+Config IDs: sq_0107, sq_0110, sq_3024, sq_5011
+SQL files: task2_estate/scheduled_queries/sq_0107__reports__revenue_daily_eur.sql,
+  task2_estate/scheduled_queries/sq_0110__reports__ltv_by_cohort_v2.sql,
+  task2_estate/scheduled_queries/sq_3024__marts__revenue_intraday_usd.sql,
+  task2_estate/scheduled_queries/sq_5011__marts__legacy_ltv_deck.sql
+Evidence: sq_0107 34:4 Expecting ); history {'SUCCEEDED': 90}; uncertain refs acme-analytics-
+  prod.raw.payments, acme-analytics-prod.raw.subscriptions sq_0110 30:11 Expecting );
+  history {'SUCCEEDED': 90}; uncertain refs acme-analytics-prod.raw.payments, acme-
+  analytics-prod.raw.subscriptions sq_3024 34:4 Expecting ); history {'SUCCEEDED': 335,
+  'FAILED': 1}; uncertain refs acme-analytics-prod.raw.payments, acme-analytics-
+  prod.raw.subscriptions sq_5011 29:11 Expecting ); history {'SUCCEEDED': 90}; uncertain
+  refs acme-analytics-prod.raw.payments, acme-analytics-prod.raw.subscriptions Uncertain
+  references are recovered backtick names, not confirmed reads. SUCCEEDED in run_history
+  is not evidence that the file parses.
+Impact: A later editor can ship SQL the parser, and possibly BigQuery, rejects or reads
+  differently.
+Recommendation: Repair the comment that sits inside the expression only after comparing the file with
+  the last job that BigQuery accepted. Do not treat the recovered table names as
+  lineage.
+
+CR-COLUMN-WRITER-CONFLICT
+Category: correctness
+Priority: 2
+Confidence: needs_verification
+Title: Scheduled writers of one table do not project the same columns a reader uses
+Config IDs: sq_0104, sq_0105, sq_0106, sq_5001
+SQL files: task2_estate/scheduled_queries/sq_0104__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0106__reports__revenue_by_region.sql,
+  task2_estate/scheduled_queries/sq_5001__marts__revenue_unified.sql
+Evidence: sq_0106 reads payment_date from reports.revenue_daily; projected by sq_0104; omitted by
+  sq_0105. sq_0106 reads region from reports.revenue_daily; projected by sq_0104;
+  omitted by sq_0105. sq_5001 reads payment_date from reports.revenue_daily; projected
+  by sq_0104; omitted by sq_0105. sq_5001 reads region from reports.revenue_daily;
+  projected by sq_0104; omitted by sq_0105. The writers do not agree. This is not a
+  claim that the column is missing from the live table.
+Impact: A reader can see a column after one writer and fail after the other writer replaces or
+  appends the table.
+Recommendation: Do not drop either writer here. Ask the owner which projection is authoritative.
+
+CR-ROW-NUMBER-NO-ORDER
+Category: correctness
+Priority: 2
+Confidence: confirmed
+Title: ROW_NUMBER has no ORDER BY
+Config IDs: sq_0102, sq_3027
+SQL files: task2_estate/scheduled_queries/sq_0102__staging__stg_subscriptions.sql,
+  task2_estate/scheduled_queries/sq_3027__staging__stg_reads_hourly.sql
+Evidence: sqlglot windows for sq_0102, sq_3027 use ROW_NUMBER and have an empty order clause.
+Impact: Which source row survives the dedupe is not determined by the SQL.
+Recommendation: Do not add an ORDER BY until the owner names the sort. The current statement is what
+  history ran.
+
+CR-SCHEMA-COUNT
+Category: correctness
+Priority: 2
+Confidence: indicated
+Title: Outermost SELECT lists do not match catalog column counts
+Config IDs: sq_0101, sq_0102, sq_0103, sq_0104, sq_0105, sq_0108, sq_0109, sq_0113, sq_0114, sq_0201, sq_0202, sq_0301, sq_0302, sq_0303, sq_0401, sq_0402, sq_0403, sq_0411, sq_0412, sq_0413, sq_0501, sq_0502, sq_0503, sq_1001, sq_1002, sq_1003, sq_1004, sq_1005, sq_1008, sq_1009, sq_1010, sq_1011, sq_1012, sq_1013, sq_1014, sq_1015, sq_1016, sq_1017, sq_1018, sq_1019, sq_1020, sq_1023, sq_1024, sq_1025, sq_1026, sq_1027, sq_1028, sq_3001, sq_3002, sq_3003, sq_3004, sq_3005, sq_3006, sq_3008, sq_3009, sq_3010, sq_3012, sq_3013, sq_3014, sq_3015, sq_3016, sq_3017, sq_3020, sq_3021, sq_3022, sq_3023, sq_3025, sq_3027, sq_3028, sq_3029, sq_3030, sq_4002, sq_4003, sq_4004, sq_4005, sq_4006, sq_4007, sq_4008, sq_4009, sq_4010, sq_4011, sq_4012, sq_4013, sq_4014, sq_4015, sq_4016, sq_4018, sq_4019, sq_4020, sq_4021, sq_4022, sq_4023, sq_4024, sq_5004, sq_5007, sq_5008, sq_5009, sq_5010, sq_5012, sq_5013, sq_5014, sq_5015, sq_5016, sq_5017, sq_5018, sq_5019
+SQL files: task2_estate/scheduled_queries/sq_0101__staging__stg_payments.sql,
+  task2_estate/scheduled_queries/sq_0102__staging__stg_subscriptions.sql,
+  task2_estate/scheduled_queries/sq_0103__staging__stg_fx_daily.sql,
+  task2_estate/scheduled_queries/sq_0104__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0108__reports__revenue_daily_strict.sql,
+  task2_estate/scheduled_queries/sq_0109__reports__ltv_by_cohort.sql,
+  task2_estate/scheduled_queries/sq_0113__reports__users_no_subscription.sql,
+  task2_estate/scheduled_queries/sq_0114__reports__payment_settle_hourly.sql,
+  task2_estate/scheduled_queries/sq_0201__marketing__spend_daily.sql,
+  task2_estate/scheduled_queries/sq_0202__marketing__spend_enriched.sql,
+  task2_estate/scheduled_queries/sq_0301__ml__user_daily.sql,
+  task2_estate/scheduled_queries/sq_0302__ml__user_features.sql,
+  task2_estate/scheduled_queries/sq_0303__ml__user_segments.sql,
+  task2_estate/scheduled_queries/sq_0401__reports__funnel_2024.sql,
+  task2_estate/scheduled_queries/sq_0402__reports__funnel_2025.sql,
+  task2_estate/scheduled_queries/sq_0403__reports__funnel_current.sql,
+  task2_estate/scheduled_queries/sq_0411__reports__funnel_all_years.sql,
+  task2_estate/scheduled_queries/sq_0412__reports__funnel_by_device.sql,
+  task2_estate/scheduled_queries/sq_0413__marts__funnel_wide.sql,
+  task2_estate/scheduled_queries/sq_0501__product__subscriber_snapshot.sql,
+  task2_estate/scheduled_queries/sq_0502__reports__subscriber_snapshot.sql,
+  task2_estate/scheduled_queries/sq_0503__ml__subscriber_snapshot.sql,
+  task2_estate/scheduled_queries/sq_1001__reports__funnel_daily_core.sql,
+  task2_estate/scheduled_queries/sq_1002__reports__funnel_daily_lang.sql,
+  task2_estate/scheduled_queries/sq_1003__reports__funnel_daily_utm.sql,
+  task2_estate/scheduled_queries/sq_1004__reports__funnel_daily_campaign.sql,
+  task2_estate/scheduled_queries/sq_1005__reports__funnel_daily_referrer.sql,
+  task2_estate/scheduled_queries/sq_1008__reports__reads_daily_device.sql,
+  task2_estate/scheduled_queries/sq_1009__reports__reads_daily_30d.sql,
+  task2_estate/scheduled_queries/sq_1010__reports__reads_daily_full.sql,
+  task2_estate/scheduled_queries/sq_1011__reports__channel_report_daily.sql,
+  task2_estate/scheduled_queries/sq_1012__reports__channel_report_weekly.sql,
+  task2_estate/scheduled_queries/sq_1013__reports__channel_report_country.sql,
+  task2_estate/scheduled_queries/sq_1014__reports__channel_report_qtd.sql,
+  task2_estate/scheduled_queries/sq_1015__reports__cohort_retention_reads.sql,
+  task2_estate/scheduled_queries/sq_1016__reports__cohort_retention_90d.sql,
+  task2_estate/scheduled_queries/sq_1017__reports__title_performance.sql,
+  task2_estate/scheduled_queries/sq_1018__reports__surface_overlap_daily.sql,
+  task2_estate/scheduled_queries/sq_1019__reports__surface_overlap_monthly.sql,
+  task2_estate/scheduled_queries/sq_1020__reports__cohort_activity_matrix.sql,
+  task2_estate/scheduled_queries/sq_1023__reports__subs_snapshot_tier.sql,
+  task2_estate/scheduled_queries/sq_1024__reports__reads_daily_paid.sql,
+  task2_estate/scheduled_queries/sq_1025__reports__funnel_daily_country.sql,
+  task2_estate/scheduled_queries/sq_1026__reports__events_daily_wide.sql,
+  task2_estate/scheduled_queries/sq_1027__reports__ltv_by_country.sql,
+  task2_estate/scheduled_queries/sq_1028__reports__users_no_sub_7d.sql,
+  task2_estate/scheduled_queries/sq_3001__marts__events_hourly_core.sql,
+  task2_estate/scheduled_queries/sq_3002__marts__events_hourly_country.sql,
+  task2_estate/scheduled_queries/sq_3003__marts__events_hourly_device.sql,
+  task2_estate/scheduled_queries/sq_3004__marts__events_hourly_lang.sql,
+  task2_estate/scheduled_queries/sq_3005__marts__events_hourly_utm.sql,
+  task2_estate/scheduled_queries/sq_3006__marts__events_hourly_exp.sql,
+  task2_estate/scheduled_queries/sq_3008__marts__payment_attempts_hourly.sql,
+  task2_estate/scheduled_queries/sq_3009__marts__payment_attempts_by_proc.sql,
+  task2_estate/scheduled_queries/sq_3010__marts__payment_attempts_retry.sql,
+  task2_estate/scheduled_queries/sq_3012__marts__revenue_hourly_topup.sql,
+  task2_estate/scheduled_queries/sq_3013__marts__settle_rate_hourly.sql,
+  task2_estate/scheduled_queries/sq_3014__marts__funnel_hourly_core.sql,
+  task2_estate/scheduled_queries/sq_3015__marts__funnel_hourly_lang.sql,
+  task2_estate/scheduled_queries/sq_3016__marts__funnel_hourly_utm.sql,
+  task2_estate/scheduled_queries/sq_3017__marts__funnel_hourly_country.sql,
+  task2_estate/scheduled_queries/sq_3020__marts__reads_hourly_genre.sql,
+  task2_estate/scheduled_queries/sq_3021__marts__reads_hourly_device.sql,
+  task2_estate/scheduled_queries/sq_3022__marts__subs_snapshot_hourly.sql,
+  task2_estate/scheduled_queries/sq_3023__marts__revenue_intraday_eur.sql,
+  task2_estate/scheduled_queries/sq_3025__staging__stg_events_hourly.sql,
+  task2_estate/scheduled_queries/sq_3027__staging__stg_reads_hourly.sql,
+  task2_estate/scheduled_queries/sq_3028__staging__stg_users_hourly.sql,
+  task2_estate/scheduled_queries/sq_3029__marts__plan_mix_hourly.sql,
+  task2_estate/scheduled_queries/sq_3030__marts__daily_rebuild_events_wide.sql,
+  task2_estate/scheduled_queries/sq_4002__ml__abtest_paywall_position.sql,
+  task2_estate/scheduled_queries/sq_4003__ml__abtest_onboarding_quiz.sql,
+  task2_estate/scheduled_queries/sq_4004__ml__abtest_price_anchor.sql,
+  task2_estate/scheduled_queries/sq_4005__ml__abtest_recs_carousel.sql,
+  task2_estate/scheduled_queries/sq_4006__ml__abtest_email_cadence.sql,
+  task2_estate/scheduled_queries/sq_4007__ml__abtest_cancel_flow.sql,
+  task2_estate/scheduled_queries/sq_4008__ml__abtest_free_episodes.sql,
+  task2_estate/scheduled_queries/sq_4009__ml__abtest_revenue_join.sql,
+  task2_estate/scheduled_queries/sq_4010__ml__abtest_revenue_join_90d.sql,
+  task2_estate/scheduled_queries/sq_4011__ml__ltv_pred_inputs.sql,
+  task2_estate/scheduled_queries/sq_4012__ml__ltv_pred_inputs_v2.sql,
+  task2_estate/scheduled_queries/sq_4013__ml__ltv_pred_inputs_v3.sql,
+  task2_estate/scheduled_queries/sq_4014__ml__reads_features_7d.sql,
+  task2_estate/scheduled_queries/sq_4015__ml__reads_features_30d.sql,
+  task2_estate/scheduled_queries/sq_4016__ml__reads_features_90d.sql,
+  task2_estate/scheduled_queries/sq_4018__ml__cohort_matrix_ml_tier.sql,
+  task2_estate/scheduled_queries/sq_4019__ml__churn_candidates.sql,
+  task2_estate/scheduled_queries/sq_4020__ml__winback_candidates.sql,
+  task2_estate/scheduled_queries/sq_4021__ml__segment_mix_daily.sql,
+  task2_estate/scheduled_queries/sq_4022__ml__engagement_overlap.sql,
+  task2_estate/scheduled_queries/sq_4023__ml__retention_ml.sql,
+  task2_estate/scheduled_queries/sq_4024__ml__funnel_ml_features.sql,
+  task2_estate/scheduled_queries/sq_5004__marts__region_rollup_new.sql,
+  task2_estate/scheduled_queries/sq_5007__marts__legacy_weekly_deck.sql,
+  task2_estate/scheduled_queries/sq_5008__marts__legacy_country_deck.sql,
+  task2_estate/scheduled_queries/sq_5009__marts__legacy_title_deck.sql,
+  task2_estate/scheduled_queries/sq_5010__marts__legacy_retention_deck.sql,
+  task2_estate/scheduled_queries/sq_5012__marts__legacy_abtest_deck.sql,
+  task2_estate/scheduled_queries/sq_5013__marts__app_version_adoption.sql,
+  task2_estate/scheduled_queries/sq_5014__marts__partner_postback_recon.sql,
+  task2_estate/scheduled_queries/sq_5015__marts__session_quality_v1.sql,
+  task2_estate/scheduled_queries/sq_5016__marts__exec_revenue_board.sql,
+  task2_estate/scheduled_queries/sq_5017__marts__exec_revenue_board_copy.sql,
+  task2_estate/scheduled_queries/sq_5018__marts__dst_gap_daily_recon.sql,
+  task2_estate/scheduled_queries/sq_5019__marts__paused_experiment_readout.sql
+Evidence: 106 destinations differ. The count is the outermost SELECT list. Inner CTE lists, stars,
+  and disagreeing UNION branches are excluded. Examples, in config_id order: sq_0101
+  staging.stg_payments sql 15 catalog 8; sq_0102 staging.stg_subscriptions sql 19
+  catalog 13; sq_0103 staging.stg_fx_daily sql 4 catalog 17; sq_0104
+  reports.revenue_daily sql 8 catalog 10. table_catalog.columns is a snapshot count, not
+  a column-by-column schema.
+Impact: A consumer written against the catalog can name a column the current SQL no longer
+  selects, or the reverse.
+Recommendation: Do not alter projections to match the catalog. Reconcile the published schema before
+  migration.
+
+CR-SHORT-LOOKBACK-sq_0104
+Category: correctness
+Priority: 2
+Confidence: indicated
+Title: sq_0104 truncates reports.revenue_daily on a shorter outer date bound than a reader filters
+Config IDs: sq_0104, sq_0106, sq_5001
+SQL files: task2_estate/scheduled_queries/sq_0104__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0106__reports__revenue_by_region.sql,
+  task2_estate/scheduled_queries/sq_5001__marts__revenue_unified.sql
+Evidence: sq_0104 is WRITE_TRUNCATE. Its outer WHERE lower bound is 3 DAY. Readers: sq_0106 outer
+  WHERE 400 DAY, sq_5001 outer WHERE 730 DAY. Intervals in the select list or only
+  inside a CTE are not used. The bound does not prove which business date the table
+  retains.
+Impact: A reader that asks for more history than this predicate writes will see only the
+  writer's window after a truncate.
+Recommendation: Do not lengthen the predicate in this audit. Confirm with the owner whether the short
+  window is intentional.
+
+CR-SHORT-LOOKBACK-sq_1001
+Category: correctness
+Priority: 2
+Confidence: indicated
+Title: sq_1001 truncates reports.funnel_daily_core on a shorter outer date bound than a reader filters
+Config IDs: sq_1001, sq_5002
+SQL files: task2_estate/scheduled_queries/sq_1001__reports__funnel_daily_core.sql,
+  task2_estate/scheduled_queries/sq_5002__marts__funnel_unified.sql
+Evidence: sq_1001 is WRITE_TRUNCATE. Its outer WHERE lower bound is 3 DAY. Readers: sq_5002 outer
+  WHERE 400 DAY. Intervals in the select list or only inside a CTE are not used. The
+  bound does not prove which business date the table retains.
+Impact: A reader that asks for more history than this predicate writes will see only the
+  writer's window after a truncate.
+Recommendation: Do not lengthen the predicate in this audit. Confirm with the owner whether the short
+  window is intentional.
+
+MN-REPEATED-SQL-sq_0105-sq_0114
+Category: maintainability
+Priority: 3
+Confidence: confirmed
+Title: Scheduled queries share the same SQL text
+Config IDs: sq_0105, sq_0114
+SQL files: task2_estate/scheduled_queries/sq_0105__reports__revenue_daily.sql,
+  task2_estate/scheduled_queries/sq_0114__reports__payment_settle_hourly.sql
+Evidence: After comment and whitespace removal the SQL matches. Destinations:
+  sq_0105->reports.revenue_daily, sq_0114->reports.payment_settle_hourly.
+Impact: A change to one copy will not change the others. Identical text can still write
+  different tables.
+Recommendation: Do not delete a copy because the text matches. Check consumers of each destination
+  first.
+
+MN-REPEATED-SQL-sq_0411-sq_0412-sq_0413
+Category: maintainability
+Priority: 3
+Confidence: confirmed
+Title: Scheduled queries share the same SQL text
+Config IDs: sq_0411, sq_0412, sq_0413
+SQL files: task2_estate/scheduled_queries/sq_0411__reports__funnel_all_years.sql,
+  task2_estate/scheduled_queries/sq_0412__reports__funnel_by_device.sql,
+  task2_estate/scheduled_queries/sq_0413__marts__funnel_wide.sql
+Evidence: After comment and whitespace removal the SQL matches. Destinations:
+  sq_0411->reports.funnel_all_years, sq_0412->reports.funnel_by_device,
+  sq_0413->marts.funnel_wide.
+Impact: A change to one copy will not change the others. Identical text can still write
+  different tables.
+Recommendation: Do not delete a copy because the text matches. Check consumers of each destination
+  first.
+
+MN-REPEATED-SQL-sq_1012-sq_5007
+Category: maintainability
+Priority: 3
+Confidence: confirmed
+Title: Scheduled queries share the same SQL text
+Config IDs: sq_1012, sq_5007
+SQL files: task2_estate/scheduled_queries/sq_1012__reports__channel_report_weekly.sql,
+  task2_estate/scheduled_queries/sq_5007__marts__legacy_weekly_deck.sql
+Evidence: After comment and whitespace removal the SQL matches. Destinations:
+  sq_1012->reports.channel_report_weekly, sq_5007->marts.legacy_weekly_deck.
+Impact: A change to one copy will not change the others. Identical text can still write
+  different tables.
+Recommendation: Do not delete a copy because the text matches. Check consumers of each destination
+  first.
+
+MN-REPEATED-SQL-sq_1016-sq_5010
+Category: maintainability
+Priority: 3
+Confidence: confirmed
+Title: Scheduled queries share the same SQL text
+Config IDs: sq_1016, sq_5010
+SQL files: task2_estate/scheduled_queries/sq_1016__reports__cohort_retention_90d.sql,
+  task2_estate/scheduled_queries/sq_5010__marts__legacy_retention_deck.sql
+Evidence: After comment and whitespace removal the SQL matches. Destinations:
+  sq_1016->reports.cohort_retention_90d, sq_5010->marts.legacy_retention_deck.
+Impact: A change to one copy will not change the others. Identical text can still write
+  different tables.
+Recommendation: Do not delete a copy because the text matches. Check consumers of each destination
+  first.
+
+MN-REPEATED-SQL-sq_1017-sq_5009
+Category: maintainability
+Priority: 3
+Confidence: confirmed
+Title: Scheduled queries share the same SQL text
+Config IDs: sq_1017, sq_5009
+SQL files: task2_estate/scheduled_queries/sq_1017__reports__title_performance.sql,
+  task2_estate/scheduled_queries/sq_5009__marts__legacy_title_deck.sql
+Evidence: After comment and whitespace removal the SQL matches. Destinations:
+  sq_1017->reports.title_performance, sq_5009->marts.legacy_title_deck.
+Impact: A change to one copy will not change the others. Identical text can still write
+  different tables.
+Recommendation: Do not delete a copy because the text matches. Check consumers of each destination
+  first.
+
+MN-REPEATED-SQL-sq_5016-sq_5017
+Category: maintainability
+Priority: 3
+Confidence: confirmed
+Title: Scheduled queries share the same SQL text
+Config IDs: sq_5016, sq_5017
+SQL files: task2_estate/scheduled_queries/sq_5016__marts__exec_revenue_board.sql,
+  task2_estate/scheduled_queries/sq_5017__marts__exec_revenue_board_copy.sql
+Evidence: After comment and whitespace removal the SQL matches. Destinations:
+  sq_5016->marts.exec_revenue_board, sq_5017->marts.exec_revenue_board_copy.
+Impact: A change to one copy will not change the others. Identical text can still write
+  different tables.
+Recommendation: Do not delete a copy because the text matches. Check consumers of each destination
+  first.
+
+MN-RETIRE-NO-RECORDED-CONSUMER
+Category: maintainability
+Priority: 3
+Confidence: needs_verification
+Title: Enabled queries have no consumer in the supplied graph or usage extract
+Config IDs: sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012
+SQL files: task2_estate/scheduled_queries/sq_5007__marts__legacy_weekly_deck.sql,
+  task2_estate/scheduled_queries/sq_5008__marts__legacy_country_deck.sql,
+  task2_estate/scheduled_queries/sq_5009__marts__legacy_title_deck.sql,
+  task2_estate/scheduled_queries/sq_5010__marts__legacy_retention_deck.sql,
+  task2_estate/scheduled_queries/sq_5011__marts__legacy_ltv_deck.sql,
+  task2_estate/scheduled_queries/sq_5012__marts__legacy_abtest_deck.sql
+Evidence: Each destination has no certain or uncertain graph read and no scheduled_query,
+  dashboard, or adhoc row in downstream_usage.csv. sq_5007->marts.legacy_weekly_deck,
+  sq_5008->marts.legacy_country_deck, sq_5009->marts.legacy_title_deck,
+  sq_5010->marts.legacy_retention_deck, sq_5011->marts.legacy_ltv_deck,
+  sq_5012->marts.legacy_abtest_deck. The catalog still lists those tables. A destination
+  named only by an uncertain reference is excluded.
+Impact: The usage extract can miss a reader. Disabling the schedule would not delete the table.
+Recommendation: Do not disable these queries and do not delete the tables. An owner has to confirm that
+  refresh can stop.
+
+5. Retirement candidates
+A candidate has no certain read of its destination and no dashboard, ad-hoc,
+or scheduled_query row in downstream_usage.csv.
+An uncertain read of the destination removes the query from this list.
+The usage file covers only the supplied extract.
+These candidates cannot be disabled automatically.
+The extract can miss a reader. SQL that did not parse can hide a reference.
+The catalog can still contain the tables.
+Disabling a schedule does not delete a table, and this audit does not recommend deletion.
+Production validation means an owner confirms the table can stop being refreshed.
+OP-ALREADY-DISABLED [confirmed] sq_5019
+MN-RETIRE-NO-RECORDED-CONSUMER [needs_verification] sq_5007, sq_5008, sq_5009, sq_5010, sq_5011, sq_5012
+Queries that fail because a source is missing, and queries with a dashboard, are not candidates.
+
+6. Limitations
+Uncertain read edges: 8. They are recovered backtick names from SQL that did not parse.
+Those names are labeled uncertain in the findings and are not used as confirmed lineage.
+SQL projects observed on table nodes: acme-analytics-prod.
+Transfer-config resource projects: 418822.
+Project resolution: unresolved.
+The graph joins tables on dataset.table. It does not copy the config project number onto the SQL project.
+No table in this estate was seen under two SQL projects. A conflict would be reported and not given a single project.
+run_history SUCCEEDED means the recorded job succeeded. It does not mean the checked-in SQL parses.
+Catalog column counts are not column names. A missing catalog row is not proof the table is absent from production.
+Schedule pairs use the timestamp offset. Config timeZone is not applied on top of that offset.
+A later run on the same calendar date is not treated as the predecessor of an earlier reader.
+A run whose end_time is earlier than its start_time is kept. The recorded instants are compared as stored.
+Lookback days come from current-timestamp predicates, not from every INTERVAL expression.
+Partition predicates are judged per source. No execution plan was requested.
+No query was executed. No production incident is inferred beyond the history states and error strings.
+An unresolved star is not reported as a missing column.
