@@ -6,6 +6,7 @@ things. Everything that matters is a TODO.
 
 Run it with:  docker compose run --rm extractor
 """
+
 from __future__ import annotations
 
 import os

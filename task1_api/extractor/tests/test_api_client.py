@@ -118,11 +118,14 @@ class PartnerAPIClientTest(unittest.TestCase):
             token = client.get_token()
         self.assertEqual(token, "tok_1")
         self.assertEqual(api.token_calls, 1)
-        self.assertEqual(api.last_token_body, {
-            "client_id": VALID_SETTINGS.client_id,
-            "client_secret": VALID_SETTINGS.client_secret,
-            "grant_type": "client_credentials",
-        })
+        self.assertEqual(
+            api.last_token_body,
+            {
+                "client_id": VALID_SETTINGS.client_id,
+                "client_secret": VALID_SETTINGS.client_secret,
+                "grant_type": "client_credentials",
+            },
+        )
 
     def test_invalid_credentials(self) -> None:
         api = _API()
