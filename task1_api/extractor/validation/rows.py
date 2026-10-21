@@ -20,6 +20,29 @@ _ISO_DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 _MONEY_RE = re.compile(r"^-?[0-9]+$")
 
 
+def parse_calendar_date(value: str) -> date:
+    """Parse a strict ``YYYY-MM-DD`` calendar date.
+
+    Args:
+        value: Date string from the partner API.
+
+    Returns:
+        The calendar date.
+
+    Raises:
+        ValueError: If ``value`` is not a valid calendar date.
+    """
+    if not isinstance(value, str):
+        raise ValueError("must be a YYYY-MM-DD string")
+    text = value.strip()
+    if not _ISO_DATE_RE.fullmatch(text):
+        raise ValueError("must be a YYYY-MM-DD string")
+    try:
+        return date.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError("is not a valid calendar date") from exc
+
+
 def normalize_rows(rows: Sequence[Mapping[str, Any]]) -> tuple[NormalizedRow, ...]:
     """Validate every raw row and return immutable normalized records.
 
@@ -78,25 +101,10 @@ def _as_mapping(row: Any, *, index: int | None) -> Mapping[str, Any]:
 
 def _parse_date(row: Mapping[str, Any], *, index: int | None) -> date:
     value = _require_value(row, "date", index=index)
-    if not isinstance(value, str):
-        _fail(
-            "must be a YYYY-MM-DD string",
-            field="date",
-            index=index,
-            row=row,
-        )
-    text = value.strip()
-    if not _ISO_DATE_RE.fullmatch(text):
-        _fail(
-            "must be a YYYY-MM-DD string",
-            field="date",
-            index=index,
-            row=row,
-        )
     try:
-        return date.fromisoformat(text)
-    except ValueError:
-        _fail("is not a valid calendar date", field="date", index=index, row=row)
+        return parse_calendar_date(value)
+    except ValueError as exc:
+        _fail(str(exc), field="date", index=index, row=row)
 
 
 def _parse_key(row: Mapping[str, Any], field: str, *, index: int | None) -> str:
