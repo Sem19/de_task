@@ -79,6 +79,7 @@ class ExtractStateTest(unittest.TestCase):
         return load_result, state
 
     def test_first_successful_checkpoint(self) -> None:
+        """The first committed window is the coverage and settlement baseline."""
         snapshot = _snapshot(
             (
                 _row(report_date=date(2026, 10, 15)),
@@ -240,6 +241,42 @@ class ExtractStateTest(unittest.TestCase):
         with connection(self.settings) as conn:
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 21)), 1)
             self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 7)), 1)
+
+    def test_one_day_gap_does_not_advance_watermarks(self) -> None:
+        first = _snapshot(
+            (_row(report_date=date(2026, 10, 7)),),
+            date_from=date(2026, 10, 1),
+            date_to=date(2026, 10, 7),
+            restated_through=date(2026, 10, 30),
+        )
+        self._commit(first)
+        gapped = _snapshot(
+            (_row(report_date=date(2026, 10, 14), country="GB"),),
+            date_from=date(2026, 10, 9),
+            date_to=date(2026, 10, 14),
+            restated_through=date(2026, 10, 30),
+        )
+        _, state = self._commit(gapped, LATER)
+        self.assertEqual(state.settled_through, date(2026, 10, 7))
+        self.assertEqual(state.loaded_through, date(2026, 10, 7))
+        self.assertEqual(state.next_incremental_start, date(2026, 10, 8))
+        with connection(self.settings) as conn:
+            self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 14)), 1)
+            self.assertEqual(_count_rows(conn, report_date=date(2026, 10, 7)), 1)
+
+    def test_pending_checkpoint_log_is_not_commit(self) -> None:
+        snapshot = _snapshot(
+            (_row(report_date=date(2026, 10, 21)),),
+            date_from=date(2026, 10, 19),
+            date_to=date(2026, 10, 21),
+            restated_through=date(2026, 10, 19),
+        )
+        with self.assertLogs("storage.state", level="INFO") as captured:
+            self._commit(snapshot)
+        text = "\n".join(captured.output).lower()
+        self.assertIn("uncommitted", text)
+        self.assertNotIn("checkpointed", text)
+        self.assertNotIn("successfully committed", text)
 
     def test_historical_backfill_does_not_advance_incremental_cursor(self) -> None:
         current = _snapshot(

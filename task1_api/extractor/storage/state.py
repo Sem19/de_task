@@ -3,6 +3,11 @@
 Watermarks advance only after ``replace_date_slice`` succeeds on the same
 connection. This module does not commit; the caller commits data and state
 together, or rolls both back.
+
+The first successful window is the coverage baseline. Later snapshots extend
+``loaded_through`` / ``settled_through`` only when they adjoin or overlap that
+contiguous prefix. Historical backfills rewrite earlier dates in place and do
+not jump the incremental cursor. Orchestration owns ``EXTRACT_START_DATE``.
 """
 
 from __future__ import annotations
@@ -24,6 +29,8 @@ from .loader import LoadResult, replace_date_slice
 
 logger = logging.getLogger(__name__)
 
+_ONE_DAY = timedelta(days=1)
+
 
 class StateConflictError(StorageError):
     """Raised when account currency or timezone disagrees with the checkpoint."""
@@ -34,10 +41,13 @@ class ExtractState:
     """Checkpoint stored in ``extract_state`` for ``partner_report``.
 
     Attributes:
-        loaded_through: Last date covered by a committed snapshot, including
-            mutable days. ``None`` before the first success.
-        settled_through: Last date loaded while it was already immutable.
-            Next incremental start is the following day.
+        loaded_through: Inclusive end of the contiguous loaded prefix,
+            including mutable days. The first successful window sets this
+            baseline. A later island does not jump it across a gap.
+            ``None`` before the first success.
+        settled_through: Inclusive end of immutable dates in that same
+            contiguous prefix. Next incremental start is the following day.
+            Historical backfills do not move this cursor forward.
         currency: Account currency frozen after the first commit.
         reporting_timezone: Account timezone frozen after the first commit.
         account_id: Partner account from the last successful snapshot.
@@ -66,7 +76,7 @@ class ExtractState:
         """Return ``settled_through + 1 day``, or ``None`` if never settled."""
         if self.settled_through is None:
             return None
-        return self.settled_through + timedelta(days=1)
+        return self.settled_through + _ONE_DAY
 
 
 def read_state(
@@ -106,7 +116,8 @@ def apply_snapshot(
         schema: Warehouse schema. Defaults to ``public``.
 
     Returns:
-        Load counts and the checkpoint that will become durable on commit.
+        Load counts and the pending checkpoint. Durable only after the
+        caller commits. This function does not log a successful commit.
 
     Raises:
         StateConflictError: If currency or timezone changed versus state.
@@ -120,8 +131,8 @@ def apply_snapshot(
     next_state = _next_state(current, snapshot, extracted_at)
     _write_state(conn, next_state, schema=schema)
     logger.info(
-        "Checkpointed extract_state report_id=%s loaded_through=%s "
-        "settled_through=%s next_start=%s",
+        "Pending extract_state write (uncommitted) report_id=%s "
+        "loaded_through=%s settled_through=%s next_start=%s",
         next_state.last_report_id,
         _iso(next_state.loaded_through),
         _iso(next_state.settled_through),
@@ -172,6 +183,11 @@ def _next_state(
 def _next_loaded_through(
     current: ExtractState | None, snapshot: ValidatedReport
 ) -> date | None:
+    """Extend the contiguous coverage prefix, or keep the previous end.
+
+    The first successful window becomes the baseline even if earlier dates
+    were never loaded.
+    """
     previous = None if current is None else current.loaded_through
     if not _extends_coverage(current, snapshot):
         return previous
@@ -183,8 +199,14 @@ def _next_loaded_through(
 def _next_settled_through(
     current: ExtractState | None, snapshot: ValidatedReport
 ) -> date | None:
+    """Settle only immutable dates that adjoin already-processed settlement.
+
+    Dates ``>= restated_through`` stay mutable. A gap after
+    ``settled_through`` does not skip. When there is no checkpoint yet, the
+    current window is the baseline.
+    """
     previous = None if current is None else current.settled_through
-    immutable_end = snapshot.restated_through - timedelta(days=1)
+    immutable_end = snapshot.restated_through - _ONE_DAY
     chunk_settled = min(snapshot.date_to, immutable_end)
     if chunk_settled < snapshot.date_from:
         return previous
@@ -198,19 +220,22 @@ def _next_settled_through(
 def _extends_coverage(current: ExtractState | None, snapshot: ValidatedReport) -> bool:
     if current is None or current.loaded_through is None:
         return True
-    if snapshot.date_from <= current.loaded_through + timedelta(days=1):
+    if _contiguous_with_settled(current.loaded_through, snapshot.date_from):
         return True
-    if current.settled_through is not None and snapshot.date_from <= (
-        current.settled_through + timedelta(days=1)
-    ):
-        return True
-    return False
+    if current.settled_through is None:
+        return False
+    return _contiguous_with_settled(current.settled_through, snapshot.date_from)
 
 
 def _contiguous_with_settled(previous: date | None, date_from: date) -> bool:
+    """Return True if ``date_from`` adjoins or overlaps ``previous``.
+
+    ``previous is None`` means no checkpoint yet, so the current window is
+    accepted as the initial baseline.
+    """
     if previous is None:
         return True
-    return date_from <= previous + timedelta(days=1)
+    return date_from <= previous + _ONE_DAY
 
 
 def _write_state(conn: psycopg.Connection, state: ExtractState, *, schema: str) -> None:

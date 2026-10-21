@@ -159,7 +159,8 @@ class ReplaceDateSliceTest(unittest.TestCase):
     def test_same_report_loaded_twice(self) -> None:
         snapshot = _snapshot((_row(),))
         first = self._load(snapshot)
-        second = self._load(snapshot, EXTRACTED_AT + timedelta(minutes=15))
+        later = EXTRACTED_AT + timedelta(minutes=15)
+        second = self._load(snapshot, later)
         self.assertEqual(first.inserted, 1)
         self.assertEqual(second.deleted, 1)
         self.assertEqual(second.inserted, 1)
@@ -169,6 +170,30 @@ class ReplaceDateSliceTest(unittest.TestCase):
         self.assertEqual(second.unchanged, 1)
         with connection(self.settings) as conn:
             self.assertEqual(_count_all(conn), 1)
+            extracted_at = conn.execute(
+                sql.SQL("SELECT extracted_at FROM {}").format(
+                    sql.Identifier(TEST_SCHEMA, "partner_report")
+                )
+            ).fetchone()
+        self.assertEqual(extracted_at, (later,))
+
+    def test_data_version_only_change_is_unchanged(self) -> None:
+        self._load(_snapshot((_row(),), data_version=42))
+        result = self._load(
+            _snapshot((_row(),), data_version=43),
+            EXTRACTED_AT + timedelta(minutes=15),
+        )
+        self.assertEqual(result.deleted, 1)
+        self.assertEqual(result.inserted, 1)
+        self.assertEqual(result.updated, 0)
+        self.assertEqual(result.unchanged, 1)
+        with connection(self.settings) as conn:
+            data_version = conn.execute(
+                sql.SQL("SELECT data_version FROM {}").format(
+                    sql.Identifier(TEST_SCHEMA, "partner_report")
+                )
+            ).fetchone()
+        self.assertEqual(data_version, (43,))
 
     def test_updated_financial_metrics(self) -> None:
         self._load(_snapshot((_row(spend_minor=101473, revenue_minor=12600),)))
@@ -186,6 +211,31 @@ class ReplaceDateSliceTest(unittest.TestCase):
             ).fetchone()
         self.assertEqual(spend, 90)
         self.assertEqual(revenue, -250)
+
+    def test_revenue_correction_is_updated(self) -> None:
+        self._load(_snapshot((_row(spend_minor=101473, revenue_minor=12600),)))
+        result = self._load(_snapshot((_row(spend_minor=101473, revenue_minor=9900),)))
+        self.assertEqual(result.deleted, 1)
+        self.assertEqual(result.inserted, 1)
+        self.assertEqual(result.updated, 1)
+        self.assertEqual(result.unchanged, 0)
+        with connection(self.settings) as conn:
+            spend, revenue = conn.execute(
+                sql.SQL(
+                    "SELECT spend_minor, revenue_minor FROM {} WHERE country = %s"
+                ).format(sql.Identifier(TEST_SCHEMA, "partner_report")),
+                ("US",),
+            ).fetchone()
+        self.assertEqual(spend, 101473)
+        self.assertEqual(revenue, 9900)
+
+    def test_replace_logs_pending_not_committed(self) -> None:
+        snapshot = _snapshot((_row(),))
+        with self.assertLogs("storage.loader", level="INFO") as captured:
+            self._load(snapshot)
+        text = "\n".join(captured.output).lower()
+        self.assertIn("uncommitted", text)
+        self.assertNotIn("successfully committed", text)
 
     def test_deleted_source_keys(self) -> None:
         self._load(

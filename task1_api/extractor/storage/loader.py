@@ -1,8 +1,7 @@
 """Transactional date-slice replace for validated partner reports.
 
 Writes ``partner_report`` only. Does not commit and does not update
-``extract_state``; Stage 4.3 must do that on the same connection before
-the caller commits.
+``extract_state``. Pair with ``apply_snapshot`` on the same connection.
 """
 
 from __future__ import annotations
@@ -19,11 +18,15 @@ from config import WAREHOUSE_SCHEMA
 from validation.models import NormalizedRow, ValidatedReport
 
 from .connection import StorageError
-from .schema import PARTNER_REPORT_COLUMNS
+from .schema import PARTNER_REPORT_COLUMNS, PARTNER_REPORT_GRAIN
 
 logger = logging.getLogger(__name__)
 
-_METRIC_FIELDS = (
+Grain = tuple[date, str, str]
+
+# Counts, money, and frozen account identity. ``data_version`` and
+# ``extracted_at`` are snapshot metadata and are not compared here.
+_BUSINESS_FIELDS = (
     "impressions",
     "clicks",
     "installs",
@@ -33,22 +36,27 @@ _METRIC_FIELDS = (
     "revenue_minor",
     "currency",
     "reporting_timezone",
-    "data_version",
 )
-_RETURNING = ("report_date", "country", "channel") + _METRIC_FIELDS
+_RETURNING = PARTNER_REPORT_GRAIN + _BUSINESS_FIELDS
+_GRAIN_LEN = len(PARTNER_REPORT_GRAIN)
 
 
 @dataclass(frozen=True)
 class LoadResult:
     """Counts from a date-slice replace. Does not imply a commit.
 
+    ``deleted`` / ``inserted`` are physical DELETE and COPY row counts.
+    ``added`` / ``removed`` / ``updated`` / ``unchanged`` are grain-level
+    business changes. ``data_version`` and ``extracted_at`` do not count
+    as updates.
+
     Attributes:
-        deleted: Rows removed from ``[date_from, date_to]``.
-        inserted: Rows written from the snapshot.
+        deleted: Physical rows removed from ``[date_from, date_to]``.
+        inserted: Physical rows written from the snapshot.
         added: Grains that did not exist in the slice before this load.
         removed: Grains deleted and not present in the snapshot.
-        updated: Grains present in both whose stored metrics changed.
-        unchanged: Grains present in both with identical stored metrics.
+        updated: Grains present in both whose business fields changed.
+        unchanged: Grains present in both with identical business fields.
         date_from: Inclusive slice start.
         date_to: Inclusive slice end.
     """
@@ -84,7 +92,8 @@ def replace_date_slice(
         schema: Warehouse schema. Defaults to ``public``.
 
     Returns:
-        Delete/insert and grain-change counts. Not a durability guarantee.
+        Delete/insert and grain-change counts for this uncommitted replace.
+        Not a durability guarantee; the caller logs a successful commit.
 
     Raises:
         StorageError: If ``extracted_at`` is naive or a statement fails.
@@ -102,8 +111,9 @@ def replace_date_slice(
         ) from exc
     result = _summarize(snapshot, previous)
     logger.info(
-        "Replaced partner_report report_id=%s window=%s..%s "
-        "deleted=%s inserted=%s added=%s removed=%s updated=%s unchanged=%s",
+        "Pending partner_report replace (uncommitted) report_id=%s "
+        "window=%s..%s deleted=%s inserted=%s added=%s removed=%s "
+        "updated=%s unchanged=%s",
         snapshot.report_id,
         result.date_from.isoformat(),
         result.date_to.isoformat(),
@@ -199,15 +209,16 @@ def _summarize(
     )
 
 
-def _row_grain(item: tuple[Any, ...]) -> tuple[date, str, str]:
-    return (item[0], item[1], item[2])
+def _row_grain(item: tuple[Any, ...]) -> Grain:
+    report_date, country, channel = item[:_GRAIN_LEN]
+    return (report_date, country, channel)
 
 
 def _row_metrics(item: tuple[Any, ...]) -> tuple[Any, ...]:
-    return item[3:]
+    return item[_GRAIN_LEN:]
 
 
-def _snapshot_grain(row: NormalizedRow) -> tuple[date, str, str]:
+def _snapshot_grain(row: NormalizedRow) -> Grain:
     return row.grain
 
 
@@ -224,5 +235,4 @@ def _snapshot_metrics(
         row.revenue_minor,
         snapshot.currency,
         snapshot.timezone,
-        snapshot.data_version,
     )
