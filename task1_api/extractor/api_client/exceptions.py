@@ -71,3 +71,29 @@ class ReportStatusError(PartnerAPIError):
 
 class ReportPaginationError(PartnerAPIError):
     """Raised when a report page is truncated or pagination is inconsistent."""
+
+
+class RetryExhaustedError(PartnerAPIError):
+    """Raised when retryable HTTP or transport errors keep failing.
+
+    Attributes:
+        attempts: Number of tries that were made.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        error: str | None = None,
+        attempts: int,
+    ) -> None:
+        super().__init__(message, status_code=status_code, error=error)
+        self.attempts = attempts
+
+
+class AmbiguousRequestError(PartnerAPIError):
+    """Raised when a POST /v2/reports call may have created a job.
+
+    The client does not retry in this case, to avoid duplicate report jobs.
+    """

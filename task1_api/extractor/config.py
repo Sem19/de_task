@@ -15,6 +15,13 @@ GRANT_TYPE = "client_credentials"
 REQUEST_TIMEOUT_S = 30.0
 TOKEN_REFRESH_MARGIN_S = 30
 
+# Stay under the partner's 60 /v2 requests per minute.
+V2_RATE_LIMIT_PER_MIN = 50
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_S = 0.5
+RETRY_BACKOFF_CAP_S = 8.0
+RETRY_AFTER_BUFFER_S = 1.0
+
 # Inclusive window is 7 days, i.e. date_to - date_from <= 6.
 REPORT_MAX_SPAN_DAYS = 6
 REPORT_POLL_INTERVAL_S = 1.0
@@ -69,6 +76,11 @@ class Settings:
             before ``expires_in`` elapses.
         poll_interval_s: Delay between report status polls.
         poll_timeout_s: Maximum time to wait for a report to reach ``DONE``.
+        v2_rate_limit_per_min: Local cap for ``/v2`` calls (below the partner's 60).
+        max_attempts: Total tries for retryable transport and HTTP 5xx/429 errors.
+        retry_backoff_s: Initial backoff for 5xx and network failures.
+        retry_backoff_cap_s: Maximum backoff between retries.
+        retry_after_buffer_s: Extra wait added to ``Retry-After`` (rolling windows).
     """
 
     api_base: str
@@ -78,6 +90,11 @@ class Settings:
     token_refresh_margin_s: int = TOKEN_REFRESH_MARGIN_S
     poll_interval_s: float = REPORT_POLL_INTERVAL_S
     poll_timeout_s: float = REPORT_POLL_TIMEOUT_S
+    v2_rate_limit_per_min: int = V2_RATE_LIMIT_PER_MIN
+    max_attempts: int = MAX_ATTEMPTS
+    retry_backoff_s: float = RETRY_BACKOFF_S
+    retry_backoff_cap_s: float = RETRY_BACKOFF_CAP_S
+    retry_after_buffer_s: float = RETRY_AFTER_BUFFER_S
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:

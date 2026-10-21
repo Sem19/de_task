@@ -36,6 +36,29 @@ def obtain_access_token(client: PartnerAPIClient) -> str:
     return _fetch_token(client)
 
 
+def invalidate_access_token(client: PartnerAPIClient) -> None:
+    """Drop the cached bearer token so the next fetch hits /oauth/token."""
+    client._access_token = None
+    client._token_expires_at = 0.0
+
+
+def refresh_access_token(client: PartnerAPIClient) -> str:
+    """Discard the cache and obtain a new bearer token.
+
+    Args:
+        client: Shared HTTP client that stores token state.
+
+    Returns:
+        Newly issued access token.
+
+    Raises:
+        PartnerAPIError: If the token request fails or the body is invalid.
+    """
+    logger.info("Refreshing access token")
+    invalidate_access_token(client)
+    return _fetch_token(client)
+
+
 def fetch_account(client: PartnerAPIClient) -> Account:
     """Fetch account reporting metadata.
 

@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
 
 from config import Settings
 
-from .auth import fetch_account, obtain_access_token
+from .auth import fetch_account, obtain_access_token, refresh_access_token
 from .exceptions import PartnerAPIError
 from .models import Account, Report, ReportRows
 from .pagination import download_rows
 from .reports import poll_until_done, request_report, request_report_status
+from .retry import (
+    SlidingWindowLimiter,
+    execute_with_retries,
+    is_token_refresh_error,
+    partner_error_code,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class PartnerAPIClient:
@@ -40,6 +49,7 @@ class PartnerAPIClient:
         )
         self._access_token: str | None = None
         self._token_expires_at: float = 0.0
+        self._v2_limiter = SlidingWindowLimiter(settings.v2_rate_limit_per_min)
 
     def __enter__(self) -> PartnerAPIClient:
         return self
@@ -153,18 +163,34 @@ class PartnerAPIClient:
     ) -> httpx.Response:
         headers = dict(kwargs.pop("headers", None) or {})
         headers["Authorization"] = f"Bearer {self.get_token()}"
+        response = self._send(method, path, headers=headers, **kwargs)
+        if response.status_code != 401:
+            return response
+        error = partner_error_code(response)
+        if not is_token_refresh_error(error):
+            return response
+        logger.info(
+            "Retrying %s %s once after %s",
+            method,
+            path,
+            error,
+        )
+        headers["Authorization"] = f"Bearer {refresh_access_token(self)}"
         return self._send(method, path, headers=headers, **kwargs)
 
     def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        try:
-            return self._http.request(method, path, **kwargs)
-        except httpx.RequestError as exc:
-            raise PartnerAPIError(f"{method} {path} failed: {exc}") from exc
+        return execute_with_retries(
+            lambda: self._http.request(method, path, **kwargs),
+            method,
+            path,
+            settings=self._settings,
+            limiter=self._v2_limiter,
+        )
 
     def _ensure_success(self, response: httpx.Response, path: str) -> None:
         if response.is_success:
             return
-        error = _error_code(response)
+        error = partner_error_code(response)
         status = response.status_code
         suffix = f" {error}" if error else ""
         raise PartnerAPIError(
@@ -187,21 +213,3 @@ class PartnerAPIClient:
                 status_code=response.status_code,
             )
         return payload
-
-
-def _error_code(response: httpx.Response) -> str | None:
-    """Read the partner error code from either response envelope."""
-    try:
-        payload = response.json()
-    except ValueError:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    detail = payload.get("detail", payload)
-    if isinstance(detail, dict):
-        error = detail.get("error")
-        return str(error) if error is not None else None
-    if isinstance(detail, str) and detail:
-        return detail
-    error = payload.get("error")
-    return str(error) if error is not None else None
