@@ -1,0 +1,378 @@
+Task 1 API findings
+===================
+
+Discrepancies between task1_api/openapi_public.yaml (Partner Traffic &
+Revenue API 2.4) and the mock in task1_api/mock_api/app.py. Source-code
+inspection is labelled "source". Calls against the running sandbox
+(http://127.0.0.1:8080, 2026-10-21) are labelled "runtime". Unit tests
+are cited where they pin the extractor's response.
+
+The extractor follows observed mock behaviour, not the published spec,
+when the two disagree. Secrets are not copied here; Compose injects
+API_CLIENT_ID / API_CLIENT_SECRET / PG_DSN into the extractor container.
+
+
+Executive summary
+-----------------
+The published spec is enough to write a client that appears to succeed
+while dropping rows or storing the wrong money.
+
+Highest-impact correctness gaps:
+
+- Pagination is offset-based, silently capped at 1000 rows per page,
+  and unstable without order_by (F2–F4). Following next_cursor or
+  assuming limit=5000 returns a full page loses rows.
+- Completeness is not in row_count. Truncation and restatement live in
+  unpublished page meta (F5, F8, F12). After a cap, row_count matches
+  the truncated list.
+- spend and revenue are integer minor-unit strings in the account
+  currency, not decimal USD (F6).
+- Report dates use a fixed UTC−7 calendar, not UTC and not IANA
+  America/Los_Angeles. In standard time those clocks can disagree by
+  one calendar day near midnight (F7).
+- A DONE report_id is frozen; reporting dates in the restatement
+  window are not (F8).
+
+F1 is not an API defect. It records that the assignment text about
+Compose credentials did not match the running mock configuration.
+
+
+F1. Assignment text vs observed credentials (not an API defect)
+---------------------------------------------------------------
+This is a mismatch between the take-home instructions and the running
+Compose / mock configuration. It is not a discrepancy between
+openapi_public.yaml and the mock HTTP API.
+
+Documentation / brief: the take-home text says credentials already set
+in docker-compose.yml are intentionally incorrect and that the real
+values are in task1_api/mock_api/.
+
+Server: mock_api/app.py reads MOCK_CLIENT_ID and MOCK_CLIENT_SECRET
+(with in-file defaults). The mock-api Compose service does not override
+those variables. The extractor and extractor-scheduler services set
+API_CLIENT_ID / API_CLIENT_SECRET to the same default pair.
+
+Evidence: source mock_api/app.py (CLIENT_ID / CLIENT_SECRET). Runtime:
+POST /oauth/token using the Compose extractor values returned HTTP 200
+with token_type=Bearer and expires_in=300. Stage 6.1 then fetched a
+full report (420 rows) with those credentials.
+
+Risk: a candidate who changes Compose to guessed values will get
+invalid_client and never extract. Treating the brief as an API defect
+without checking the mock wastes time; there was no live mismatch
+between Compose and the mock.
+
+Extractor: Settings.from_env() reads API_CLIENT_ID and API_CLIENT_SECRET
+from the container environment (config.py). crontab and schedule-run.sh
+contain no credentials. Logs use safe_dsn_context and never print the
+secret or DSN password.
+
+
+F2. Cursor pagination vs offset pagination
+------------------------------------------
+Documentation: GET /v2/reports/{id}/rows is cursor-based. Pass
+next_cursor from the previous page as cursor; omit cursor on the first
+page. OpenAPI parameters are cursor, limit, order_by.
+
+Server: report_rows() takes Query offset (default 0) and limit
+(default 100). There is no cursor parameter. The JSON body has rows,
+total, has_more, and meta. next_cursor is never set.
+
+Evidence: source mock_api/app.py report_rows(). Runtime report
+6358bfb2686746fb: GET .../rows?cursor=abc&limit=2 returned keys
+['has_more', 'meta', 'rows', 'total'], next_cursor absent, has_more
+true, total 60. Offset pagination on the same job worked.
+
+Risk: a spec-faithful client that follows next_cursor never advances
+and either loops the first page or stops after one page, dropping rows.
+
+Extractor: download_rows() in api_client/pagination.py pages with
+offset, limit=1000, and order_by. Offset advances by len(page), not by
+the requested limit. test_pagination.py asserts those query params.
+
+
+F3. Unstable row order without order_by
+---------------------------------------
+Documentation: "Rows come back in a stable order, so a cursor always
+resumes from the same position."
+
+Server: without order_by, rows are shuffled with
+seed = _h(report_id, int(time.time() // 7)). The comment in
+report_rows() says shard order is not stable, so page boundaries move
+between calls. With order_by, rows are sorted by the named fields.
+
+Evidence: source mock_api/app.py report_rows() (the else branch). Not
+re-verified by waiting out the 7-second seed bucket at runtime.
+
+Risk: offset pagination without a sort key duplicates or skips grains
+across pages.
+
+Extractor: always sends order_by=date,country,channel
+(config.REPORT_ORDER_BY). Grain uniqueness is checked after fetch
+(validation/report.py _require_unique_grain).
+
+
+F4. Effective maximum page size is 1000, not 5000
+-------------------------------------------------
+Documentation: limit maximum is 5000 (OpenAPI schema).
+
+Server: PAGE_MAX defaults to 1000. report_rows() does
+limit = min(limit, PAGE_MAX) with no error.
+
+Evidence: source mock_api/app.py PAGE_MAX and report_rows(). Runtime
+report 18778ab3929f4d42 (date+country+hour, 2026-10-15..2026-10-21,
+row_count=2016): GET .../rows?offset=0&limit=5000 returned 1000 rows,
+total=2016, has_more=true. offset=1000 returned the next 1000.
+
+Risk: a client that requests limit=5000 and assumes one page equals
+min(5000, total) silently drops the remainder.
+
+Extractor: REPORT_PAGE_LIMIT = 1000. fetch_rows loops until has_more is
+false and checks fetched == total. Truncated or short pages fail the
+snapshot.
+
+
+F5. Truncation and misleading row_count
+---------------------------------------
+Documentation: a DONE report "returns all rows matching the request".
+row_count is "total rows in the completed report". Truncation is not
+described.
+
+Server: if build_rows() produces more than ROW_CAP (default 10000)
+rows, the job stores rows[:ROW_CAP] and sets truncated=True.
+row_count is len(the capped list), so it agrees with /rows total and
+looks complete. The flag lives only in page meta.truncated.
+
+Evidence: source mock_api/app.py report_status() (job["truncated"] /
+rows[:ROW_CAP]) and report_rows() meta. Runtime 420-row Stage 6.1
+snapshot had truncated=false (under the cap). Rejection of
+truncated=true is covered by test_pagination.py and
+test_validation_report.py / test_end_to_end.py.
+
+Risk: loading row_count as "complete" under-counts high-cardinality
+requests and looks internally consistent.
+
+Extractor: pagination raises ReportPaginationError on truncated pages.
+validate_report() also rejects truncated snapshots. Nothing is written
+to PostgreSQL.
+
+
+F6. Currency and monetary representation
+----------------------------------------
+Documentation: spend and revenue are decimal numbers in USD.
+
+Server: account currency is EUR. spend and revenue are integer minor
+units encoded as decimal strings (no fractional major units, no float).
+
+Evidence: source mock_api/app.py module comment, ACCOUNT_CURRENCY,
+build_rows() (`str(agg[k])` for spend/revenue), cell() "minor units".
+Runtime sample row: spend_type str spend 132288, revenue_type str
+revenue 63427; GET /v2/account currency=EUR. Stage 6.1 reconciled
+spend_minor_sum=30284140 and revenue_minor_sum=43811744 as ints with
+zero mismatches.
+
+Risk: float(major USD) corrupts money; analysts summing "dollars"
+would be off by 100x and the wrong currency.
+
+Extractor: _parse_money() in validation/rows.py requires an integer
+minor-unit string and stores bigint spend_minor / revenue_minor.
+validate_report() requires report meta.currency to equal
+GET /v2/account currency; it does not hardcode EUR. The first
+committed currency is frozen in extract_state (StateConflictError on a
+later change). This sandbox account happens to be EUR. Floats are
+rejected. Reconcile helpers also refuse non-int money.
+
+
+F7. Reporting timezone is not UTC, and the LA label is not IANA
+---------------------------------------------------------------
+Documentation: "All dates and hours in requests and responses are UTC."
+
+Server: GET /v2/account timezone is America/Los_Angeles. Dates are
+account-calendar dates. account_today() is
+(UTC now + ACCOUNT_TZ_OFFSET_H).date() with ACCOUNT_TZ_OFFSET_H = -7
+year-round. IANA America/Los_Angeles is UTC−8 during standard time
+(Pacific Standard Time) and UTC−7 during daylight time. The mock does
+not apply DST.
+
+Evidence: source mock_api/app.py ACCOUNT_TZ, ACCOUNT_TZ_OFFSET_H,
+account_today(). Runtime GET /v2/account timezone=America/Los_Angeles;
+GET /healthz account_today=2026-10-21 (same as extractor window
+planning). window.py documents the UTC−7 clock.
+
+Risk: a client that uses zoneinfo("America/Los_Angeles") during
+standard time is one hour behind the mock. Around local midnight that
+hour can fall on different calendar dates, so account_today,
+restated_through, and incremental windows drift by a day.
+
+Extractor: account_today() in window.py uses ACCOUNT_TZ_OFFSET_HOURS=-7.
+reporting_timezone is stored on every partner_report row (init.sql /
+migration 001). Account timezone must match report meta.timezone.
+StateConflictError if a later snapshot changes timezone.
+
+
+F8. Historical restatement vs "DONE rows are final"
+---------------------------------------------------
+Documentation: "once a report reaches status DONE, its rows are final
+and will not change."
+
+Server: that is true for one report_id (rows are built once and cached
+on the job). It is not true for a reporting date. Dates with
+0 <= (account_today - day) < RESTATE_DAYS (default 3) recompute
+installs/signups/payers/revenue using version_epoch() (default every
+10 minutes). A new job for the same window can differ. meta includes
+data_version and restated_through = account_today - (RESTATE_DAYS-1).
+
+Evidence: source cell() maturity block, version_epoch(), report_rows()
+meta. Runtime meta for 6358bfb2686746fb: data_version=2987669,
+restated_through=2026-10-19, matching healthz version_epoch.
+
+Risk: treating an old DONE job as forever-correct leaves mutable days
+stale. Comparing two independently submitted mutable reports as if
+their money must match will fail across version epochs.
+
+Extractor: each run fetches a new snapshot and replace_date_slice()
+rewrites [date_from, date_to]. Settlement only covers dates strictly
+before restated_through. Incremental planning re-requests
+settled_through+1 through account today (the mutable tail). Stage 6.1
+compared PostgreSQL to the same report_id, not a later job.
+
+
+F9. Token lifetime is 300 seconds, not "long-lived"
+---------------------------------------------------
+Documentation: "Tokens are long-lived; obtain one at the start of your
+job and reuse it."
+
+Server: TOKEN_TTL_S defaults to 300. Compose sets MOCK_TOKEN_TTL_S=300.
+Expired tokens return HTTP 401 error=token_expired (and invalid_token
+for unknown tokens).
+
+Evidence: source require_token() and token(). Runtime POST /oauth/token
+expires_in=300. Runtime GET /v2/account with Bearer dead -> 401
+{"detail":{"error":"invalid_token"}}. test_resilience.py covers
+token_expired refresh.
+
+Risk: a 15-minute extract that caches one token for the whole process
+starts getting 401 after five minutes.
+
+Extractor: caches the token, refreshes TOKEN_REFRESH_MARGIN_S (30)
+seconds before expires_in, and on 401 token_expired / invalid_token
+refreshes once and retries the same request (api_client/client.py
+_authenticated, auth.py).
+
+
+F10. Rate limit plus a separate report-concurrency limit
+--------------------------------------------------------
+Documentation: 60 requests per minute; 429 with Retry-After. POST
+/v2/reports 429 is described only as rate_limited.
+
+Server: middleware counts /v2/* in a 60-second window
+(RATE_LIMIT_PER_MIN, Compose MOCK_RATE_LIMIT=60) and returns flat JSON
+{"error":"rate_limited",...} with Retry-After. Separately, if two jobs
+are still running (MOCK_MAX_JOBS=2, JOB_RUNTIME_S=3), POST /v2/reports
+returns 429 error=too_many_jobs, Retry-After=5. That status is not in
+OpenAPI.
+
+Evidence: source rate_limit() and create_report() live-job check.
+Extractor tests: test_resilience.py 429 rate_limited and too_many_jobs.
+HTTP 429 retries on POST /v2/reports are covered there; POST 5xx is
+not retried (test_ambiguous_post_5xx_is_not_retried).
+
+Risk: a limiter that only knows "60/min" still trips too_many_jobs.
+Treating every POST /v2/reports failure as retryable can duplicate
+jobs; treating every 429 as ambiguous will stall behind a real
+rate limit.
+
+Extractor: SlidingWindowLimiter caps /v2 calls at 50/min.
+
+HTTP 429 is an explicit partner response (rate_limited from the
+middleware, or too_many_jobs from POST /v2/reports). The client
+retries it using Retry-After plus a 1s buffer.
+
+That is not the same as an ambiguous POST. Transport errors or HTTP
+5xx on POST /v2/reports, after the request may have left the client,
+raise AmbiguousRequestError and are not retried (duplicate-job risk).
+One report is in flight per chunk; the advisory lock serializes
+extractor processes.
+
+
+F11. Error envelopes are not a single schema
+--------------------------------------------
+Documentation: OpenAPI lists error names on 400/401/404/429 with no
+response schema.
+
+Server: FastAPI HTTPException bodies are wrapped as
+{"detail": {"error": "...", ...}}. The rate-limit middleware returns
+unwrapped {"error": "rate_limited", ...}.
+
+Evidence: runtime invalid token 401 {"detail":{"error":"invalid_token"}};
+runtime missing token 401 {"detail":{"error":"missing_token"}}; runtime
+creative_id+hour 400 {"detail":{"error":"incompatible_dimensions",...}}.
+Source rate_limit() JSONResponse is flat. partner_error_code() in
+retry.py reads both shapes. test_resilience.py
+test_flat_and_nested_error_envelopes.
+
+Risk: parsing only payload["error"] misses most 4xx codes.
+
+Extractor: partner_error_code() accepts nested detail or a top-level
+error string and uses that for retry / token-refresh decisions.
+
+
+F12. Unpublished account and page metadata
+------------------------------------------
+Documentation: GET /v2/account properties are account_id, timezone,
+currency. GET rows properties are rows, total, has_more, next_cursor.
+
+Server: account also returns attribution_window_days (3). Each rows
+page includes meta.currency, meta.timezone, meta.data_version,
+meta.restated_through, meta.truncated.
+
+Evidence: runtime GET /v2/account and the rows payload for
+6358bfb2686746fb. Source account() and report_rows().
+
+Risk: ignoring restated_through / truncated / data_version loads
+partial or mutable data as if it were a complete USD/UTC snapshot.
+
+Extractor: fetch_account() requires attribution_window_days.
+_parse_page() requires the full meta object. validate_report() checks
+currency/timezone against the account and uses restated_through for
+settlement.
+
+
+F13. Extra incompatible dimension pair
+--------------------------------------
+Documentation: "placement cannot be combined with hour".
+
+Server: FORBIDDEN_PAIRS is {placement, hour} and {creative_id, hour}.
+
+Evidence: source mock_api/app.py FORBIDDEN_PAIRS. Runtime POST with
+dimensions hour+creative_id -> 400 incompatible_dimensions
+"['creative_id', 'hour'] cannot be requested together".
+
+Risk: a dimensions explorer that only avoids placement+hour still gets
+400.
+
+Extractor: always requests date, country, channel (three dimensions,
+no hour). It does not call /v2/dimensions at runtime.
+
+
+F14. Report job persistence is undocumented; the mock keeps jobs in memory
+-------------------------------------------------------------------------
+Documentation: OpenAPI describes GET /v2/reports/{report_id} and 404
+unknown_report. It does not say whether jobs survive a server restart.
+
+Server: source inspection of mock_api/app.py shows `_jobs` as a
+module-level dict. That is in-process memory. Restarting the mock
+process would drop every report_id; GET would then return 404. That
+restart behaviour was not exercised at runtime.
+
+Evidence: source `_jobs = {}` and report_status() 404 branch. The live
+sandbox was left running, so post-restart 404 was not confirmed.
+
+Risk: inferred from source — a poll or fetch after a mock bounce looks
+like a lost report. Blind resubmit of POST /v2/reports can
+double-submit if the first job still exists.
+
+Extractor: one bounded resubmit when GET report 404s after submit
+(REPORT_RESUBMIT_LIMIT=1 in pipeline._complete_report). Ambiguous POST
+failures are never retried. Checkpoint does not advance until
+PostgreSQL commit of that snapshot.
