@@ -1,0 +1,32 @@
+config {
+  type: "table",
+  schema: "staging",
+  name: "stg_fx_daily",
+  tags: ["revenue_daily"]
+}
+
+-- stg fx daily fill-forward
+-- owner: olena.kravets@acme.co
+-- created: 2023-02-20
+-- source scheduled query: sq_0103
+WITH spine AS (
+  SELECT rate_date
+  FROM UNNEST(GENERATE_DATE_ARRAY('2022-01-01', CURRENT_DATE())) AS rate_date
+),
+currencies AS (
+  SELECT DISTINCT currency FROM ${ref("fx_rates")}
+)
+SELECT
+    spine.rate_date,
+    currencies.currency,
+    fx.rate_to_usd,
+    LAST_VALUE(fx.rate_to_usd IGNORE NULLS) OVER (
+        PARTITION BY currencies.currency
+        ORDER BY spine.rate_date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS last_known_rate
+FROM spine
+CROSS JOIN currencies
+LEFT JOIN ${ref("fx_rates")} fx
+    ON fx.rate_date = spine.rate_date
+   AND fx.currency = currencies.currency
