@@ -26,6 +26,8 @@ RETRY_AFTER_BUFFER_S = 1.0
 
 # Inclusive window is 7 days, i.e. date_to - date_from <= 6.
 REPORT_MAX_SPAN_DAYS = 6
+# Default first-run lookback: last 7 inclusive reporting days.
+DEFAULT_LOOKBACK_SPAN_DAYS = REPORT_MAX_SPAN_DAYS
 REPORT_POLL_INTERVAL_S = 1.0
 REPORT_POLL_TIMEOUT_S = 60.0
 
@@ -57,6 +59,10 @@ EXTRACT_LOCK_ID = 1
 # Mock account timezone. Used only to backfill legacy rows that predate
 # ``reporting_timezone``. New inserts must supply the account timezone.
 MOCK_ACCOUNT_TIMEZONE = "America/Los_Angeles"
+# The mock labels the account America/Los_Angeles but computes account_today
+# as UTC−7 year-round. IANA America/Los_Angeles is UTC−8 during standard time.
+ACCOUNT_TZ_OFFSET_HOURS = -7
+EXTRACT_START_DATE_ENV = "EXTRACT_START_DATE"
 
 REPORT_STATUS_PENDING = "PENDING"
 REPORT_STATUS_RUNNING = "RUNNING"
